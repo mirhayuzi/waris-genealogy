@@ -285,7 +285,31 @@ function parseDateString(s: string): { year: number; month: number; day: number 
   return null;
 }
 
-// ---- Photo Picker ----
+// ---- Photo Picker (Fixed for device camera/gallery) ----
+
+async function copyPhotoToAppStorage(sourceUri: string): Promise<string> {
+  // On web, just return the URI as-is (blob or data URI)
+  if (Platform.OS === "web") {
+    return sourceUri;
+  }
+
+  // On native, copy to a persistent location using fetch + base64
+  // This avoids issues with temporary camera URIs being deleted
+  try {
+    const FileSystem = require("expo-file-system/legacy");
+    if (!FileSystem.documentDirectory) {
+      return sourceUri;
+    }
+    const fileName = `photo_${Date.now()}.jpg`;
+    const destUri = `${FileSystem.documentDirectory}${fileName}`;
+    await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+    return destUri;
+  } catch (e) {
+    // If copy fails, return original URI
+    console.warn("Failed to copy photo to app storage:", e);
+    return sourceUri;
+  }
+}
 
 export function PhotoPicker({ photo, onPhotoChange }: {
   photo: string | undefined;
@@ -293,55 +317,104 @@ export function PhotoPicker({ photo, onPhotoChange }: {
 }) {
   const colors = useColors();
   const [showOptions, setShowOptions] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const pickFromGallery = async () => {
+  const pickFromGallery = useCallback(async () => {
     setShowOptions(false);
+    setLoading(true);
     try {
+      // Request permission first
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Please allow access to your photo library in Settings.");
+        setLoading(false);
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.7,
+        exif: false,
       });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        onPhotoChange(result.assets[0].uri);
-      }
-    } catch (e) {
-      Alert.alert("Error", "Failed to pick image from gallery.");
-    }
-  };
 
-  const takePhoto = async () => {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        const persistedUri = await copyPhotoToAppStorage(uri);
+        onPhotoChange(persistedUri);
+      }
+    } catch (e: any) {
+      console.error("Gallery picker error:", e);
+      Alert.alert("Error", "Failed to pick image from gallery. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [onPhotoChange]);
+
+  const takePhoto = useCallback(async () => {
     setShowOptions(false);
+    setLoading(true);
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Camera permission is needed to take photos.");
+        Alert.alert("Permission Required", "Camera permission is needed to take photos. Please enable it in Settings.");
+        setLoading(false);
         return;
       }
+
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.7,
+        exif: false,
       });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        onPhotoChange(result.assets[0].uri);
-      }
-    } catch (e) {
-      Alert.alert("Error", "Failed to take photo.");
-    }
-  };
 
-  const removePhoto = () => {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        const persistedUri = await copyPhotoToAppStorage(uri);
+        onPhotoChange(persistedUri);
+      }
+    } catch (e: any) {
+      console.error("Camera error:", e);
+      Alert.alert("Error", "Failed to take photo. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [onPhotoChange]);
+
+  const removePhoto = useCallback(() => {
     setShowOptions(false);
     onPhotoChange(undefined);
-  };
+  }, [onPhotoChange]);
+
+  // Handle pending results (Android activity destruction)
+  const checkPendingResult = useCallback(async () => {
+    if (Platform.OS === "android") {
+      try {
+        const result = await ImagePicker.getPendingResultAsync();
+        if (result && Array.isArray(result) && result.length > 0) {
+          const picked = result[0];
+          if ("canceled" in picked && !picked.canceled && picked.assets?.[0]?.uri) {
+            const persistedUri = await copyPhotoToAppStorage(picked.assets[0].uri);
+            onPhotoChange(persistedUri);
+          }
+        }
+      } catch (_) {
+        // Ignore - no pending result
+      }
+    }
+  }, [onPhotoChange]);
 
   return (
     <>
       <FormLabel text="Photo (Optional)" />
       <View className="items-center mb-4">
-        <Pressable onPress={() => setShowOptions(true)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
+        <Pressable
+          onPress={() => { checkPendingResult(); setShowOptions(true); }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+        >
           {photo ? (
             <View style={{ position: "relative" }}>
               <Image
@@ -371,8 +444,14 @@ export function PhotoPicker({ photo, onPhotoChange }: {
                 alignItems: "center", justifyContent: "center",
               }}
             >
-              <IconSymbol name="camera.fill" size={24} color={colors.primary} />
-              <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>Add Photo</Text>
+              {loading ? (
+                <Text style={{ fontSize: 10, color: colors.muted }}>Loading...</Text>
+              ) : (
+                <>
+                  <IconSymbol name="camera.fill" size={24} color={colors.primary} />
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>Add Photo</Text>
+                </>
+              )}
             </View>
           )}
         </Pressable>
@@ -392,29 +471,44 @@ export function PhotoPicker({ photo, onPhotoChange }: {
 
               <Pressable onPress={takePhoto} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                 <View className="flex-row items-center px-5 py-3.5 gap-3">
-                  <IconSymbol name="camera.fill" size={20} color={colors.primary} />
-                  <Text className="text-sm text-foreground">Take Photo</Text>
+                  <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: colors.primary + "15" }}>
+                    <IconSymbol name="camera.fill" size={20} color={colors.primary} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-foreground">Take Photo</Text>
+                    <Text className="text-xs text-muted">Use camera to capture a new photo</Text>
+                  </View>
                 </View>
               </Pressable>
 
               <Pressable onPress={pickFromGallery} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                 <View className="flex-row items-center px-5 py-3.5 gap-3">
-                  <IconSymbol name="photo.fill" size={20} color={colors.primary} />
-                  <Text className="text-sm text-foreground">Choose from Gallery</Text>
+                  <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: "#4285F4" + "15" }}>
+                    <IconSymbol name="photo.fill" size={20} color="#4285F4" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-foreground">Choose from Gallery</Text>
+                    <Text className="text-xs text-muted">Select an existing photo from your device</Text>
+                  </View>
                 </View>
               </Pressable>
 
               {photo && (
                 <Pressable onPress={removePhoto} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                   <View className="flex-row items-center px-5 py-3.5 gap-3">
-                    <IconSymbol name="xmark" size={20} color={colors.error} />
-                    <Text className="text-sm" style={{ color: colors.error }}>Remove Photo</Text>
+                    <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: colors.error + "15" }}>
+                      <IconSymbol name="trash.fill" size={20} color={colors.error} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-medium" style={{ color: colors.error }}>Remove Photo</Text>
+                      <Text className="text-xs text-muted">Delete the current photo</Text>
+                    </View>
                   </View>
                 </Pressable>
               )}
 
               <Pressable onPress={() => setShowOptions(false)} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-                <View className="mx-5 mt-2 py-3 rounded-xl border border-border items-center">
+                <View className="mx-5 mt-3 py-3 rounded-xl border border-border items-center">
                   <Text className="text-sm font-medium text-muted">Cancel</Text>
                 </View>
               </Pressable>

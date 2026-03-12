@@ -34,3 +34,6 @@
 - [x] Feature: Tree node tap navigates to member profile
 - [x] Feature: Profile button to set member as root and view their family tree
 - [x] Feature: Zoomable family tree (pinch-to-zoom and zoom buttons)
+- [x] Bug: Photo upload error from camera and gallery (fixed: use correct mediaTypes API for SDK 54)
+- [x] Bug: Backup creation error (fixed: platform-safe FileSystem handling + web fallback)
+- [x] Feature: Redesign import/export like Fuelio app Google Drive sync settings
