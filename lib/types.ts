@@ -10,9 +10,13 @@ export const PREFIXES = [
 ] as const;
 
 export const ETHNICITIES = [
-  "Melayu", "Jawa", "Bugis", "Arab", "Banjar", "Minangkabau",
-  "Chinese", "Indian", "Iban", "Kadazan", "Bidayuh", "Orang Asli", "Others",
+  "Melayu", "Bajau", "Jawa", "Bugis", "Arab", "Banjar", "Minangkabau",
+  "Chinese", "Indian", "Iban", "Kadazan", "Bidayuh", "Others",
 ] as const;
+
+export const RELIGIONS: Religion[] = [
+  "Islam", "Buddhism", "Hinduism", "Christianity", "Sikhism", "Others",
+];
 
 export interface Person {
   id: string;

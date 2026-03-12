@@ -1,69 +1,21 @@
-import { Text, View, Pressable, ScrollView, TextInput, Alert } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
-import { useState, useEffect } from "react";
-import { Gender, Religion, PREFIXES, ETHNICITIES } from "@/lib/types";
-
-function FormLabel({ text }: { text: string }) {
-  return <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">{text}</Text>;
-}
-
-function FormInput({ value, onChangeText, placeholder, multiline }: {
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder: string;
-  multiline?: boolean;
-}) {
-  const colors = useColors();
-  return (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.muted}
-      className="bg-surface border border-border rounded-xl px-4 py-3 text-sm text-foreground mb-4"
-      style={{ color: colors.foreground, minHeight: multiline ? 80 : undefined }}
-      multiline={multiline}
-      textAlignVertical={multiline ? "top" : "center"}
-    />
-  );
-}
-
-function ChipSelector({ options, selected, onSelect, colors }: {
-  options: readonly string[];
-  selected: string;
-  onSelect: (v: string) => void;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View className="flex-row flex-wrap gap-2 mb-4">
-      {options.map((opt) => (
-        <Pressable key={opt} onPress={() => onSelect(opt)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
-          <View
-            className="px-3 py-1.5 rounded-full border"
-            style={{
-              backgroundColor: selected === opt ? colors.primary : "transparent",
-              borderColor: selected === opt ? colors.primary : colors.border,
-            }}
-          >
-            <Text className="text-xs font-medium" style={{ color: selected === opt ? "#fff" : colors.foreground }}>
-              {opt}
-            </Text>
-          </View>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
+import { useState, useMemo } from "react";
+import { Gender, Religion, PREFIXES, ETHNICITIES, getDisplayName } from "@/lib/types";
+import {
+  FormLabel, FormInput, ChipSelector,
+  DropdownSelector, DatePickerField, PhotoPicker, RelationshipLinkSelector,
+} from "@/components/member-form";
 
 export default function EditMemberScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
-  const { getPersonById, updatePerson } = useFamily();
+  const { getPersonById, updatePerson, data, addParentChild, addMarriage, deleteParentChild, deleteMarriage } = useFamily();
 
   const person = getPersonById(id || "");
 
@@ -79,6 +31,35 @@ export default function EditMemberScreen() {
   const [race, setRace] = useState(person?.race || "");
   const [religion, setReligion] = useState<Religion>(person?.religion || "Islam");
   const [bio, setBio] = useState(person?.bio || "");
+  const [photo, setPhoto] = useState<string | undefined>(person?.photo);
+
+  // Build existing relationship links from data
+  const existingLinks = useMemo(() => {
+    if (!id) return [];
+    const links: { type: "spouse" | "parent" | "child"; personId: string }[] = [];
+
+    // Parents of this person
+    data.parentChildren
+      .filter((pc) => pc.childId === id)
+      .forEach((pc) => links.push({ type: "parent", personId: pc.parentId }));
+
+    // Children of this person
+    data.parentChildren
+      .filter((pc) => pc.parentId === id)
+      .forEach((pc) => links.push({ type: "child", personId: pc.childId }));
+
+    // Spouses of this person
+    data.marriages
+      .filter((m) => m.husbandId === id || m.wifeId === id)
+      .forEach((m) => {
+        const spouseId = m.husbandId === id ? m.wifeId : m.husbandId;
+        links.push({ type: "spouse", personId: spouseId });
+      });
+
+    return links;
+  }, [id, data.parentChildren, data.marriages]);
+
+  const [links, setLinks] = useState(existingLinks);
 
   if (!person) {
     return (
@@ -96,6 +77,7 @@ export default function EditMemberScreen() {
       Alert.alert("Required", "Please enter the first name.");
       return;
     }
+
     updatePerson({
       ...person,
       prefix: prefix || undefined,
@@ -109,8 +91,57 @@ export default function EditMemberScreen() {
       race: race || undefined,
       religion,
       bio: bio.trim() || undefined,
+      photo: photo || undefined,
       isAlive,
     });
+
+    // Sync relationship links: remove old, add new
+    // Remove old parent-child where this person is child
+    data.parentChildren
+      .filter((pc) => pc.childId === id)
+      .forEach((pc) => {
+        if (!links.some((l) => l.type === "parent" && l.personId === pc.parentId)) {
+          deleteParentChild(pc.id);
+        }
+      });
+    // Remove old parent-child where this person is parent
+    data.parentChildren
+      .filter((pc) => pc.parentId === id)
+      .forEach((pc) => {
+        if (!links.some((l) => l.type === "child" && l.personId === pc.childId)) {
+          deleteParentChild(pc.id);
+        }
+      });
+    // Remove old marriages
+    data.marriages
+      .filter((m) => m.husbandId === id || m.wifeId === id)
+      .forEach((m) => {
+        const spouseId = m.husbandId === id ? m.wifeId : m.husbandId;
+        if (!links.some((l) => l.type === "spouse" && l.personId === spouseId)) {
+          deleteMarriage(m.id);
+        }
+      });
+
+    // Add new links
+    for (const link of links) {
+      if (link.type === "parent") {
+        const exists = data.parentChildren.some((pc) => pc.parentId === link.personId && pc.childId === id);
+        if (!exists) addParentChild({ parentId: link.personId, childId: id!, type: "biological" });
+      } else if (link.type === "child") {
+        const exists = data.parentChildren.some((pc) => pc.parentId === id && pc.childId === link.personId);
+        if (!exists) addParentChild({ parentId: id!, childId: link.personId, type: "biological" });
+      } else if (link.type === "spouse") {
+        const exists = data.marriages.some(
+          (m) => (m.husbandId === id && m.wifeId === link.personId) || (m.wifeId === id && m.husbandId === link.personId)
+        );
+        if (!exists) {
+          const husbandId = gender === "male" ? id! : link.personId;
+          const wifeId = gender === "female" ? id! : link.personId;
+          addMarriage({ husbandId, wifeId, isActive: true, notes: undefined });
+        }
+      }
+    }
+
     router.back();
   };
 
@@ -132,6 +163,10 @@ export default function EditMemberScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Photo */}
+        <PhotoPicker photo={photo} onPhotoChange={setPhoto} />
+
+        {/* Gender */}
         <FormLabel text="Gender" />
         <View className="flex-row gap-3 mb-4">
           {(["male", "female"] as Gender[]).map((g) => (
@@ -151,9 +186,16 @@ export default function EditMemberScreen() {
           ))}
         </View>
 
-        <FormLabel text="Prefix / Title (Optional)" />
-        <ChipSelector options={PREFIXES} selected={prefix} onSelect={(v) => setPrefix(v === prefix ? "" : v)} colors={colors} />
+        {/* Prefix - Dropdown */}
+        <DropdownSelector
+          label="Prefix / Title (Optional)"
+          options={PREFIXES}
+          selected={prefix}
+          onSelect={setPrefix}
+          placeholder="Select prefix..."
+        />
 
+        {/* Name */}
         <FormLabel text="First Name *" />
         <FormInput value={firstName} onChangeText={setFirstName} placeholder="e.g. Ahmad, Siti" />
 
@@ -163,12 +205,13 @@ export default function EditMemberScreen() {
         <FormLabel text="Last Name / Clan Name (Optional)" />
         <FormInput value={lastName} onChangeText={setLastName} placeholder="e.g. Al-Attas" />
 
-        <FormLabel text="Date of Birth" />
-        <FormInput value={birthDate} onChangeText={setBirthDate} placeholder="e.g. 1965-03-15" />
+        {/* Dates - Calendar Picker */}
+        <DatePickerField label="Date of Birth" value={birthDate} onChange={setBirthDate} />
 
         <FormLabel text="Place of Birth" />
         <FormInput value={birthPlace} onChangeText={setBirthPlace} placeholder="e.g. Kota Bharu" />
 
+        {/* Alive/Deceased */}
         <FormLabel text="Status" />
         <View className="flex-row gap-3 mb-4">
           {[true, false].map((alive) => (
@@ -181,7 +224,7 @@ export default function EditMemberScreen() {
                 }}
               >
                 <Text className="text-sm font-medium" style={{ color: isAlive === alive ? "#fff" : colors.foreground }}>
-                  {alive ? "Living" : "Deceased"}
+                  {alive ? "Living (Hidup)" : "Deceased (Meninggal)"}
                 </Text>
               </View>
             </Pressable>
@@ -189,23 +232,30 @@ export default function EditMemberScreen() {
         </View>
 
         {!isAlive && (
-          <>
-            <FormLabel text="Date of Death" />
-            <FormInput value={deathDate} onChangeText={setDeathDate} placeholder="e.g. 2020-01-10" />
-          </>
+          <DatePickerField label="Date of Death" value={deathDate} onChange={setDeathDate} />
         )}
 
+        {/* Ethnicity */}
         <FormLabel text="Ethnicity" />
-        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} colors={colors} />
+        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} />
 
+        {/* Religion */}
         <FormLabel text="Religion" />
         <ChipSelector
           options={["Islam", "Buddhism", "Hinduism", "Christianity", "Sikhism", "Others"] as const}
           selected={religion}
           onSelect={(v) => setReligion(v as Religion)}
-          colors={colors}
         />
 
+        {/* Relationship Links */}
+        <RelationshipLinkSelector
+          persons={data.persons}
+          currentPersonId={id}
+          selectedLinks={links}
+          onLinksChange={setLinks}
+        />
+
+        {/* Bio */}
         <FormLabel text="Notes / Biography (Optional)" />
         <FormInput value={bio} onChangeText={setBio} placeholder="Short biography..." multiline />
       </ScrollView>

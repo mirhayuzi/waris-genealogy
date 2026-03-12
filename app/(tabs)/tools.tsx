@@ -1,9 +1,11 @@
-import { Text, View, Pressable, ScrollView } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useFamily } from "@/lib/family-store";
+import { exportFamilyTreePDF, printFamilyTree } from "@/lib/pdf-export";
+import { useState } from "react";
 
 interface ToolCardProps {
   title: string;
@@ -11,12 +13,13 @@ interface ToolCardProps {
   icon: any;
   onPress: () => void;
   color: string;
+  loading?: boolean;
 }
 
-function ToolCard({ title, description, icon, onPress, color }: ToolCardProps) {
+function ToolCard({ title, description, icon, onPress, color, loading }: ToolCardProps) {
   const colors = useColors();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+    <Pressable onPress={loading ? undefined : onPress} style={({ pressed }) => [{ opacity: loading ? 0.5 : pressed ? 0.7 : 1 }]}>
       <View className="flex-row items-center bg-surface rounded-2xl p-4 border border-border gap-4">
         <View
           className="w-12 h-12 rounded-xl items-center justify-center"
@@ -26,7 +29,7 @@ function ToolCard({ title, description, icon, onPress, color }: ToolCardProps) {
         </View>
         <View className="flex-1">
           <Text className="text-base font-semibold text-foreground">{title}</Text>
-          <Text className="text-xs text-muted mt-0.5">{description}</Text>
+          <Text className="text-xs text-muted mt-0.5">{loading ? "Generating..." : description}</Text>
         </View>
         <IconSymbol name="chevron.right" size={18} color={colors.muted} />
       </View>
@@ -38,8 +41,36 @@ export default function ToolsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data } = useFamily();
+  const [exporting, setExporting] = useState(false);
 
   const muslimCount = data.persons.filter((p) => p.religion === "Islam").length;
+
+  const handleExportPDF = async () => {
+    if (data.persons.length === 0) {
+      Alert.alert("No Data", "Please add family members before exporting.");
+      return;
+    }
+    setExporting(true);
+    try {
+      await exportFamilyTreePDF(data);
+    } catch (e) {
+      Alert.alert("Export Failed", "Could not generate PDF. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (data.persons.length === 0) {
+      Alert.alert("No Data", "Please add family members before printing.");
+      return;
+    }
+    try {
+      await printFamilyTree(data);
+    } catch (e) {
+      Alert.alert("Print Failed", "Could not print. Please try again.");
+    }
+  };
 
   return (
     <ScreenContainer className="px-5 pt-2">
@@ -66,6 +97,26 @@ export default function ToolsScreen() {
           />
         </View>
 
+        {/* Export & Print Section */}
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Export & Print</Text>
+        <View className="gap-3 mb-6">
+          <ToolCard
+            title="Export Family Tree PDF"
+            description="Generate a printable family tree report"
+            icon="arrow.down.doc.fill"
+            color="#E65100"
+            onPress={handleExportPDF}
+            loading={exporting}
+          />
+          <ToolCard
+            title="Print Family Tree"
+            description="Print your family tree directly"
+            icon="doc.text.fill"
+            color="#FF9500"
+            onPress={handlePrint}
+          />
+        </View>
+
         {/* Family Tools Section */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Family Management</Text>
         <View className="gap-3 mb-6">
@@ -79,8 +130,8 @@ export default function ToolsScreen() {
           <ToolCard
             title="Family Statistics"
             description={`${data.persons.length} members · ${muslimCount} Muslim`}
-            icon="doc.text.fill"
-            color="#FF9500"
+            icon="info.circle.fill"
+            color="#34C759"
             onPress={() => {}}
           />
         </View>

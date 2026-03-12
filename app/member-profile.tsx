@@ -1,4 +1,5 @@
 import { Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { Image } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -114,18 +115,24 @@ export default function MemberProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
         {/* Profile Header */}
         <View className="items-center mb-6">
-          <View
-            className="w-24 h-24 rounded-full items-center justify-center mb-3 border-3"
-            style={{
-              backgroundColor: (person.isAlive ? colors.primary : colors.muted) + "15",
-              borderColor: person.isAlive ? colors.primary : colors.muted,
-              borderWidth: 3,
-            }}
-          >
-            <Text className="text-3xl font-bold" style={{ color: person.isAlive ? colors.primary : colors.muted }}>
-              {person.firstName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {person.photo ? (
+            <View style={{ width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: person.isAlive ? colors.primary : colors.muted, overflow: "hidden", marginBottom: 12 }}>
+              <Image source={{ uri: person.photo }} style={{ width: 90, height: 90, borderRadius: 45 }} contentFit="cover" />
+            </View>
+          ) : (
+            <View
+              className="w-24 h-24 rounded-full items-center justify-center mb-3"
+              style={{
+                backgroundColor: (person.isAlive ? colors.primary : colors.muted) + "15",
+                borderColor: person.isAlive ? colors.primary : colors.muted,
+                borderWidth: 3,
+              }}
+            >
+              <Text className="text-3xl font-bold" style={{ color: person.isAlive ? colors.primary : colors.muted }}>
+                {person.firstName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <Text className="text-xl font-bold text-foreground text-center">{getDisplayName(person)}</Text>
           <View className="flex-row items-center gap-2 mt-1">
             <View

@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -6,6 +6,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
+import { exportFaraidPDF } from "@/lib/pdf-export";
 
 interface HeirShare {
   person: Person;
@@ -233,7 +234,7 @@ export default function FaraidCalculatorScreen() {
             </View>
 
             {/* Total */}
-            <View className="bg-surface rounded-2xl p-4 border border-border">
+            <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
               <View className="flex-row justify-between">
                 <Text className="text-sm font-medium text-foreground">Total Distributed</Text>
                 <Text className="text-sm font-bold" style={{ color: Math.abs(totalPercentage - 100) < 1 ? colors.success : colors.warning }}>
@@ -246,6 +247,34 @@ export default function FaraidCalculatorScreen() {
                 </Text>
               )}
             </View>
+
+            {/* Export PDF Button */}
+            <Pressable
+              onPress={async () => {
+                try {
+                  const estateAmount = 100000; // Default example
+                  const heirData = heirShares.map((h) => ({
+                    heir: `${getDisplayName(h.person)} (${h.relation})`,
+                    share: `${h.fraction} = ${h.percentage.toFixed(1)}%`,
+                    amount: (h.percentage / 100) * estateAmount,
+                  }));
+                  await exportFaraidPDF(
+                    data.familyName,
+                    getDisplayName(selectedPerson),
+                    estateAmount,
+                    heirData
+                  );
+                } catch (e) {
+                  Alert.alert("Export Failed", "Could not generate Faraid PDF.");
+                }
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+            >
+              <View className="flex-row items-center justify-center bg-primary rounded-2xl py-3.5 gap-2">
+                <IconSymbol name="arrow.down.doc.fill" size={18} color="#fff" />
+                <Text className="text-sm font-semibold text-white">Export Faraid Report as PDF</Text>
+              </View>
+            </Pressable>
           </>
         )}
 

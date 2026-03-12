@@ -1,11 +1,12 @@
-import { Text, View, Pressable, ScrollView, Dimensions } from "react-native";
+import { Text, View, Pressable, ScrollView, Dimensions, TextInput } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useFamily } from "@/lib/family-store";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { getDisplayName, Person } from "@/lib/types";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface TreeNode {
   person: Person;
@@ -50,6 +51,40 @@ function useTreeData() {
   }, [data]);
 }
 
+function PersonAvatar({ person, size, colors }: {
+  person: Person;
+  size: number;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const borderColor = person.isAlive ? colors.primary : colors.muted;
+
+  if (person.photo) {
+    return (
+      <Image
+        source={{ uri: person.photo }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        contentFit="cover"
+      />
+    );
+  }
+
+  return (
+    <View
+      className="items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: borderColor + "20",
+      }}
+    >
+      <Text className="font-bold" style={{ color: borderColor, fontSize: size * 0.4 }}>
+        {person.firstName.charAt(0).toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
 function PersonNode({ person, isRoot, onPress, colors }: {
   person: Person;
   isRoot?: boolean;
@@ -63,15 +98,8 @@ function PersonNode({ person, isRoot, onPress, colors }: {
         className="items-center rounded-2xl p-3 bg-surface border-2 min-w-[100px]"
         style={{ borderColor }}
       >
-        <View
-          className="w-12 h-12 rounded-full items-center justify-center mb-1"
-          style={{ backgroundColor: borderColor + "20" }}
-        >
-          <Text className="text-lg font-bold" style={{ color: borderColor }}>
-            {person.firstName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <Text className="text-xs font-semibold text-foreground text-center" numberOfLines={2}>
+        <PersonAvatar person={person} size={48} colors={colors} />
+        <Text className="text-xs font-semibold text-foreground text-center mt-1" numberOfLines={2}>
           {person.prefix ? `${person.prefix} ` : ""}{person.firstName}
         </Text>
         {person.binBinti && (
@@ -97,7 +125,6 @@ function TreeLevel({ node, router, colors, rootId }: {
 }) {
   return (
     <View className="items-center">
-      {/* Current person + spouses */}
       <View className="flex-row items-center gap-2">
         <PersonNode
           person={node.person}
@@ -117,15 +144,13 @@ function TreeLevel({ node, router, colors, rootId }: {
         ))}
       </View>
 
-      {/* Connector line */}
       {node.children.length > 0 && (
         <View className="w-0.5 h-6" style={{ backgroundColor: colors.border }} />
       )}
 
-      {/* Children */}
       {node.children.length > 0 && (
         <View className="flex-row gap-4 items-start">
-          {node.children.map((child, idx) => (
+          {node.children.map((child) => (
             <View key={child.person.id} className="items-center">
               {node.children.length > 1 && (
                 <View className="w-0.5 h-3" style={{ backgroundColor: colors.border }} />
@@ -144,11 +169,22 @@ export default function TreeScreen() {
   const colors = useColors();
   const { data } = useFamily();
   const treeData = useTreeData();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredPersons = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return data.persons.filter((p) =>
+      getDisplayName(p).toLowerCase().includes(q) ||
+      (p.race && p.race.toLowerCase().includes(q)) ||
+      (p.religion && p.religion.toLowerCase().includes(q))
+    );
+  }, [searchQuery, data.persons]);
 
   return (
     <ScreenContainer className="pt-2">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 mb-4">
+      <View className="flex-row items-center justify-between px-5 mb-3">
         <View>
           <Text className="text-2xl font-bold text-foreground">Family Tree</Text>
           <Text className="text-sm text-muted">{data.persons.length} members</Text>
@@ -163,7 +199,62 @@ export default function TreeScreen() {
         </Pressable>
       </View>
 
-      {treeData ? (
+      {/* Search Bar */}
+      {data.persons.length > 0 && (
+        <View className="px-5 mb-3">
+          <View className="flex-row items-center bg-surface border border-border rounded-xl px-3 gap-2">
+            <IconSymbol name="magnifyingglass" size={18} color={colors.muted} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search by name, ethnicity, religion..."
+              placeholderTextColor={colors.muted}
+              className="flex-1 py-2.5 text-sm"
+              style={{ color: colors.foreground }}
+              returnKeyType="done"
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery("")} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+                <IconSymbol name="xmark" size={16} color={colors.muted} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Search Results */}
+      {searchQuery.trim().length > 0 ? (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+          <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
+            {filteredPersons.length} result{filteredPersons.length !== 1 ? "s" : ""}
+          </Text>
+          {filteredPersons.map((person) => (
+            <Pressable
+              key={person.id}
+              onPress={() => router.push({ pathname: "/member-profile" as any, params: { id: person.id } })}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            >
+              <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
+                <PersonAvatar person={person} size={40} colors={colors} />
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
+                  <Text className="text-xs text-muted">
+                    {person.isAlive ? "Living" : "Deceased"}
+                    {person.race ? ` · ${person.race}` : ""}
+                    {person.religion ? ` · ${person.religion}` : ""}
+                  </Text>
+                </View>
+                <IconSymbol name="chevron.right" size={16} color={colors.muted} />
+              </View>
+            </Pressable>
+          ))}
+          {filteredPersons.length === 0 && (
+            <View className="items-center py-8">
+              <Text className="text-sm text-muted">No members found matching "{searchQuery}"</Text>
+            </View>
+          )}
+        </ScrollView>
+      ) : treeData ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

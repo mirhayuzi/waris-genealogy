@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, TextInput, Alert } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -6,61 +6,10 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { useState } from "react";
 import { Gender, Religion, PREFIXES, ETHNICITIES } from "@/lib/types";
-
-function FormLabel({ text }: { text: string }) {
-  return <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">{text}</Text>;
-}
-
-function FormInput({ value, onChangeText, placeholder, multiline }: {
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder: string;
-  multiline?: boolean;
-}) {
-  const colors = useColors();
-  return (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.muted}
-      className="bg-surface border border-border rounded-xl px-4 py-3 text-sm text-foreground mb-4"
-      style={{ color: colors.foreground, minHeight: multiline ? 80 : undefined }}
-      multiline={multiline}
-      textAlignVertical={multiline ? "top" : "center"}
-    />
-  );
-}
-
-function ChipSelector({ options, selected, onSelect, colors }: {
-  options: readonly string[];
-  selected: string;
-  onSelect: (v: string) => void;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View className="flex-row flex-wrap gap-2 mb-4">
-      {options.map((opt) => (
-        <Pressable key={opt} onPress={() => onSelect(opt)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
-          <View
-            className="px-3 py-1.5 rounded-full border"
-            style={{
-              backgroundColor: selected === opt ? colors.primary : "transparent",
-              borderColor: selected === opt ? colors.primary : colors.border,
-            }}
-          >
-            <Text
-              className="text-xs font-medium"
-              style={{ color: selected === opt ? "#fff" : colors.foreground }}
-            >
-              {opt}
-            </Text>
-          </View>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
+import {
+  FormLabel, FormInput, ChipSelector,
+  DropdownSelector, DatePickerField, PhotoPicker, RelationshipLinkSelector,
+} from "@/components/member-form";
 
 export default function AddMemberScreen() {
   const router = useRouter();
@@ -80,6 +29,14 @@ export default function AddMemberScreen() {
   const [race, setRace] = useState("");
   const [religion, setReligion] = useState<Religion>("Islam");
   const [bio, setBio] = useState("");
+  const [photo, setPhoto] = useState<string | undefined>(undefined);
+  const [links, setLinks] = useState<{ type: "spouse" | "parent" | "child"; personId: string }[]>(() => {
+    const initial: { type: "spouse" | "parent" | "child"; personId: string }[] = [];
+    if (params.parentId) initial.push({ type: "parent", personId: params.parentId });
+    if (params.spouseId) initial.push({ type: "spouse", personId: params.spouseId });
+    if (params.childOfId) initial.push({ type: "child", personId: params.childOfId });
+    return initial;
+  });
 
   const handleSave = () => {
     if (!firstName.trim()) {
@@ -100,7 +57,7 @@ export default function AddMemberScreen() {
       race: race || undefined,
       religion,
       icNumber: undefined,
-      photo: undefined,
+      photo: photo || undefined,
       bio: bio.trim() || undefined,
       isAlive,
     });
@@ -110,19 +67,19 @@ export default function AddMemberScreen() {
       setRootPerson(person.id);
     }
 
-    // Link relationships if params provided
-    if (params.parentId) {
-      addParentChild({ parentId: params.parentId, childId: person.id, type: "biological" });
-    }
-    if (params.childOfId) {
-      addParentChild({ parentId: person.id, childId: params.childOfId, type: "biological" });
-    }
-    if (params.spouseId) {
-      const spousePerson = data.persons.find((p) => p.id === params.spouseId);
-      if (spousePerson) {
-        const husbandId = gender === "male" ? person.id : params.spouseId;
-        const wifeId = gender === "female" ? person.id : params.spouseId;
-        addMarriage({ husbandId, wifeId, isActive: true, notes: undefined });
+    // Process relationship links
+    for (const link of links) {
+      if (link.type === "parent") {
+        addParentChild({ parentId: link.personId, childId: person.id, type: "biological" });
+      } else if (link.type === "child") {
+        addParentChild({ parentId: person.id, childId: link.personId, type: "biological" });
+      } else if (link.type === "spouse") {
+        const spousePerson = data.persons.find((p) => p.id === link.personId);
+        if (spousePerson) {
+          const husbandId = gender === "male" ? person.id : link.personId;
+          const wifeId = gender === "female" ? person.id : link.personId;
+          addMarriage({ husbandId, wifeId, isActive: true, notes: undefined });
+        }
       }
     }
 
@@ -148,6 +105,9 @@ export default function AddMemberScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Photo */}
+        <PhotoPicker photo={photo} onPhotoChange={setPhoto} />
+
         {/* Gender */}
         <FormLabel text="Gender" />
         <View className="flex-row gap-3 mb-4">
@@ -168,9 +128,14 @@ export default function AddMemberScreen() {
           ))}
         </View>
 
-        {/* Prefix */}
-        <FormLabel text="Prefix / Title (Optional)" />
-        <ChipSelector options={PREFIXES} selected={prefix} onSelect={(v) => setPrefix(v === prefix ? "" : v)} colors={colors} />
+        {/* Prefix - Dropdown */}
+        <DropdownSelector
+          label="Prefix / Title (Optional)"
+          options={PREFIXES}
+          selected={prefix}
+          onSelect={setPrefix}
+          placeholder="Select prefix..."
+        />
 
         {/* Name */}
         <FormLabel text="First Name *" />
@@ -182,9 +147,8 @@ export default function AddMemberScreen() {
         <FormLabel text="Last Name / Clan Name (Optional)" />
         <FormInput value={lastName} onChangeText={setLastName} placeholder="e.g. Al-Attas, Tan, Krishnan" />
 
-        {/* Dates */}
-        <FormLabel text="Date of Birth" />
-        <FormInput value={birthDate} onChangeText={setBirthDate} placeholder="e.g. 1965-03-15 or 15 Mac 1965" />
+        {/* Dates - Calendar Picker */}
+        <DatePickerField label="Date of Birth" value={birthDate} onChange={setBirthDate} />
 
         <FormLabel text="Place of Birth" />
         <FormInput value={birthPlace} onChangeText={setBirthPlace} placeholder="e.g. Kota Bharu, Kelantan" />
@@ -210,15 +174,12 @@ export default function AddMemberScreen() {
         </View>
 
         {!isAlive && (
-          <>
-            <FormLabel text="Date of Death" />
-            <FormInput value={deathDate} onChangeText={setDeathDate} placeholder="e.g. 2020-01-10" />
-          </>
+          <DatePickerField label="Date of Death" value={deathDate} onChange={setDeathDate} />
         )}
 
         {/* Ethnicity */}
         <FormLabel text="Ethnicity" />
-        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} colors={colors} />
+        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} />
 
         {/* Religion */}
         <FormLabel text="Religion" />
@@ -226,7 +187,13 @@ export default function AddMemberScreen() {
           options={["Islam", "Buddhism", "Hinduism", "Christianity", "Sikhism", "Others"] as const}
           selected={religion}
           onSelect={(v) => setReligion(v as Religion)}
-          colors={colors}
+        />
+
+        {/* Relationship Links */}
+        <RelationshipLinkSelector
+          persons={data.persons}
+          selectedLinks={links}
+          onLinksChange={setLinks}
         />
 
         {/* Bio */}

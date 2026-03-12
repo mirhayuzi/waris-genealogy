@@ -18,3 +18,11 @@
 - [x] Build role-based permissions (Admin, Editor, Viewer)
 - [x] Generate custom app icon
 - [x] Polish UI and test all flows
+- [x] Fix: Date of Birth use calendar selector instead of text input
+- [x] Fix: Prefix/Title use dropdown list instead of text input
+- [x] Fix: Ethnicity - add "Bajau" after Melayu, remove "Orang Asli"
+- [x] Fix: Add photo option in Add/Edit member
+- [x] Fix: Relationship link selector in Add/Edit member (spouse, child, parent connection)
+- [x] Feature: Photo support for family members (camera/gallery)
+- [x] Feature: PDF export for family tree and Faraid reports
+- [x] Feature: Search/filter on Home and Tree screens
