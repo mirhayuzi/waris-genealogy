@@ -19,6 +19,7 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { FamilyProvider } from "@/lib/family-store";
+import { I18nProvider } from "@/lib/i18n";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -81,6 +82,7 @@ export default function RootLayout() {
 
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <I18nProvider>
       <FamilyProvider>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
@@ -95,12 +97,16 @@ export default function RootLayout() {
             <Stack.Screen name="faraid-calculator" />
             <Stack.Screen name="mahram-checker" />
             <Stack.Screen name="invite-family" options={{ presentation: "modal" }} />
+            <Stack.Screen name="family-timeline" />
+            <Stack.Screen name="miller-columns" />
+            <Stack.Screen name="backup-restore" />
             <Stack.Screen name="oauth/callback" />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>
       </trpc.Provider>
       </FamilyProvider>
+      </I18nProvider>
     </GestureHandlerRootView>
   );
 

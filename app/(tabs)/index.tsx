@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
+import { useI18n } from "@/lib/i18n";
 
 function MemberAvatar({ person, size, colors }: {
   person: Person;
@@ -40,6 +41,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data } = useFamily();
+  const { t } = useI18n();
   const totalMembers = data.persons.length;
   const livingMembers = data.persons.filter((p) => p.isAlive).length;
   const deceasedMembers = totalMembers - livingMembers;
@@ -71,10 +73,10 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Header */}
         <View className="mb-4">
-          <Text className="text-sm text-muted mb-1">Assalamualaikum</Text>
+          <Text className="text-sm text-muted mb-1">{t("greeting")}</Text>
           <Text className="text-3xl font-bold text-foreground">{data.familyName}</Text>
           <Text className="text-sm text-muted mt-1">
-            {totalMembers} {totalMembers === 1 ? "member" : "members"} recorded
+            {totalMembers} {totalMembers === 1 ? t("memberRecorded") : t("membersRecorded")}
           </Text>
         </View>
 
@@ -86,7 +88,7 @@ export default function HomeScreen() {
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search members by name, ethnicity..."
+                placeholder={t("searchMembers")}
                 placeholderTextColor={colors.muted}
                 className="flex-1 py-2.5 text-sm"
                 style={{ color: colors.foreground }}
@@ -105,7 +107,7 @@ export default function HomeScreen() {
         {isSearching ? (
           <View>
             <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-              {filteredMembers.length} result{filteredMembers.length !== 1 ? "s" : ""}
+              {filteredMembers.length} {filteredMembers.length !== 1 ? t("results") : t("result")}
             </Text>
             {filteredMembers.map((person) => (
               <Pressable
@@ -118,7 +120,7 @@ export default function HomeScreen() {
                   <View className="flex-1">
                     <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
                     <Text className="text-xs text-muted">
-                      {person.isAlive ? "Living" : "Deceased"}
+                      {person.isAlive ? t("living") : t("deceased")}
                       {person.race ? ` · ${person.race}` : ""}
                       {person.birthPlace ? ` · ${person.birthPlace}` : ""}
                     </Text>
@@ -129,7 +131,7 @@ export default function HomeScreen() {
             ))}
             {filteredMembers.length === 0 && (
               <View className="items-center py-8">
-                <Text className="text-sm text-muted">No members found matching "{searchQuery}"</Text>
+                <Text className="text-sm text-muted">{t("noMembersFound")} "{searchQuery}"</Text>
               </View>
             )}
           </View>
@@ -139,21 +141,22 @@ export default function HomeScreen() {
             <View className="flex-row gap-3 mb-6">
               <View className="flex-1 bg-surface rounded-2xl p-4 border border-border">
                 <Text className="text-2xl font-bold text-primary">{livingMembers}</Text>
-                <Text className="text-xs text-muted mt-1">Living</Text>
+                <Text className="text-xs text-muted mt-1">{t("living")}</Text>
               </View>
               <View className="flex-1 bg-surface rounded-2xl p-4 border border-border">
                 <Text className="text-2xl font-bold text-foreground">{deceasedMembers}</Text>
-                <Text className="text-xs text-muted mt-1">Deceased</Text>
+                <Text className="text-xs text-muted mt-1">{t("deceased")}</Text>
               </View>
               <View className="flex-1 bg-surface rounded-2xl p-4 border border-border">
                 <Text className="text-2xl font-bold" style={{ color: colors.accent }}>{totalMarriages}</Text>
-                <Text className="text-xs text-muted mt-1">Marriages</Text>
+                <Text className="text-xs text-muted mt-1">{t("marriages")}</Text>
               </View>
             </View>
 
             {/* Quick Actions */}
-            <Text className="text-lg font-semibold text-foreground mb-3">Quick Actions</Text>
+            <Text className="text-lg font-semibold text-foreground mb-3">{t("quickActions")}</Text>
             <View className="gap-3 mb-6">
+              {/* Add Member - Primary */}
               <Pressable
                 onPress={() => router.push("/add-member" as any)}
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
@@ -163,13 +166,14 @@ export default function HomeScreen() {
                     <IconSymbol name="person.badge.plus" size={22} color="#fff" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-base font-semibold text-white">Add Family Member</Text>
-                    <Text className="text-xs text-white/70">Record a new person in your tree</Text>
+                    <Text className="text-base font-semibold text-white">{t("addFamilyMember")}</Text>
+                    <Text className="text-xs text-white/70">{t("recordNewPerson")}</Text>
                   </View>
                   <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.5)" />
                 </View>
               </Pressable>
 
+              {/* Row 1: Tree, Miller, Timeline */}
               <View className="flex-row gap-3">
                 <Pressable
                   onPress={() => router.push("/(tabs)/tree")}
@@ -177,16 +181,38 @@ export default function HomeScreen() {
                 >
                   <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
                     <IconSymbol name="tree" size={28} color={colors.primary} />
-                    <Text className="text-sm font-medium text-foreground">View Tree</Text>
+                    <Text className="text-xs font-medium text-foreground text-center">{t("viewTree")}</Text>
                   </View>
                 </Pressable>
+                <Pressable
+                  onPress={() => router.push("/miller-columns" as any)}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
+                    <IconSymbol name="list.bullet" size={28} color={colors.primary} />
+                    <Text className="text-xs font-medium text-foreground text-center">{t("millerView")}</Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/family-timeline" as any)}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
+                    <IconSymbol name="clock.fill" size={28} color={colors.primary} />
+                    <Text className="text-xs font-medium text-foreground text-center">{t("timeline")}</Text>
+                  </View>
+                </Pressable>
+              </View>
+
+              {/* Row 2: Invite, Faraid, Backup */}
+              <View className="flex-row gap-3">
                 <Pressable
                   onPress={() => router.push("/invite-family" as any)}
                   style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
                 >
                   <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
                     <IconSymbol name="person.2.fill" size={28} color={colors.primary} />
-                    <Text className="text-sm font-medium text-foreground">Invite Family</Text>
+                    <Text className="text-xs font-medium text-foreground text-center">{t("inviteFamily")}</Text>
                   </View>
                 </Pressable>
                 <Pressable
@@ -195,7 +221,16 @@ export default function HomeScreen() {
                 >
                   <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
                     <IconSymbol name="chart.pie.fill" size={28} color={colors.primary} />
-                    <Text className="text-sm font-medium text-foreground">Faraid</Text>
+                    <Text className="text-xs font-medium text-foreground text-center">{t("faraid")}</Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/backup-restore" as any)}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">
+                    <IconSymbol name="arrow.down.doc.fill" size={28} color={colors.primary} />
+                    <Text className="text-xs font-medium text-foreground text-center">{t("backupRestore")}</Text>
                   </View>
                 </Pressable>
               </View>
@@ -204,7 +239,7 @@ export default function HomeScreen() {
             {/* Recent Members */}
             {recentMembers.length > 0 && (
               <>
-                <Text className="text-lg font-semibold text-foreground mb-3">Recently Added</Text>
+                <Text className="text-lg font-semibold text-foreground mb-3">{t("recentlyAdded")}</Text>
                 <View className="gap-2">
                   {recentMembers.map((person) => (
                     <Pressable
@@ -217,7 +252,7 @@ export default function HomeScreen() {
                         <View className="flex-1">
                           <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
                           <Text className="text-xs text-muted">
-                            {person.isAlive ? "Living" : "Deceased"}
+                            {person.isAlive ? t("living") : t("deceased")}
                             {person.birthDate ? ` · Born ${person.birthDate}` : ""}
                           </Text>
                         </View>
@@ -235,16 +270,16 @@ export default function HomeScreen() {
                 <View className="w-20 h-20 rounded-full bg-primary/10 items-center justify-center mb-4">
                   <IconSymbol name="tree" size={40} color={colors.primary} />
                 </View>
-                <Text className="text-xl font-semibold text-foreground mb-2">Start Your Family Tree</Text>
+                <Text className="text-xl font-semibold text-foreground mb-2">{t("startFamilyTree")}</Text>
                 <Text className="text-sm text-muted text-center px-8 mb-6">
-                  Begin by adding yourself as the first member, then grow your tree by adding parents, siblings, and children.
+                  {t("startFamilyTreeDesc")}
                 </Text>
                 <Pressable
                   onPress={() => router.push("/add-member" as any)}
                   style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
                 >
                   <View className="bg-primary rounded-full px-8 py-3">
-                    <Text className="text-white font-semibold text-base">Add First Member</Text>
+                    <Text className="text-white font-semibold text-base">{t("addFirstMember")}</Text>
                   </View>
                 </Pressable>
               </View>

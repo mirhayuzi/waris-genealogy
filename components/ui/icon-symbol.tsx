@@ -35,6 +35,16 @@ const MAPPING = {
   "exclamationmark.triangle.fill": "warning",
   "arrow.down.doc.fill": "file-download",
   "paperplane.fill": "send",
+  "clock.fill": "schedule",
+  "list.bullet": "view-list",
+  "arrow.up.doc.fill": "file-upload",
+  "globe": "language",
+  "plus": "add",
+  "minus": "remove",
+  "arrow.clockwise": "refresh",
+  "square.grid.2x2.fill": "grid-view",
+  "folder.fill": "folder",
+  "arrow.down.circle.fill": "download",
 } as IconMapping;
 
 export function IconSymbol({

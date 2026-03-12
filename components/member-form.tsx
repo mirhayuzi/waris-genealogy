@@ -1,4 +1,5 @@
-import { Text, View, Pressable, ScrollView, TextInput, Modal, FlatList, Platform } from "react-native";
+import { Text, View, Pressable, ScrollView, TextInput, Modal, FlatList, Platform, Alert } from "react-native";
+import { Image } from "expo-image";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Gender, Religion, PREFIXES, ETHNICITIES, Person, getDisplayName } from "@/lib/types";
@@ -295,30 +296,39 @@ export function PhotoPicker({ photo, onPhotoChange }: {
 
   const pickFromGallery = async () => {
     setShowOptions(false);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      onPhotoChange(result.assets[0].uri);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        onPhotoChange(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to pick image from gallery.");
     }
   };
 
   const takePhoto = async () => {
     setShowOptions(false);
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      onPhotoChange(result.assets[0].uri);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Camera permission is needed to take photos.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        onPhotoChange(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to take photo.");
     }
   };
 
@@ -332,22 +342,39 @@ export function PhotoPicker({ photo, onPhotoChange }: {
       <FormLabel text="Photo (Optional)" />
       <View className="items-center mb-4">
         <Pressable onPress={() => setShowOptions(true)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
-          <View
-            className="w-24 h-24 rounded-full items-center justify-center border-2 border-dashed overflow-hidden"
-            style={{ borderColor: colors.border }}
-          >
-            {photo ? (
-              <View className="w-full h-full bg-primary/20 items-center justify-center">
-                <IconSymbol name="checkmark" size={28} color={colors.primary} />
-                <Text className="text-[9px] text-primary mt-0.5">Photo set</Text>
+          {photo ? (
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: photo }}
+                style={{ width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: colors.primary }}
+                contentFit="cover"
+              />
+              <View
+                style={{
+                  position: "absolute", bottom: 0, right: 0,
+                  width: 30, height: 30, borderRadius: 15,
+                  backgroundColor: colors.primary,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 2, borderColor: colors.background,
+                }}
+              >
+                <IconSymbol name="camera.fill" size={13} color="#fff" />
               </View>
-            ) : (
-              <View className="items-center">
-                <IconSymbol name="camera.fill" size={24} color={colors.muted} />
-                <Text className="text-[10px] text-muted mt-1">Add Photo</Text>
-              </View>
-            )}
-          </View>
+            </View>
+          ) : (
+            <View
+              style={{
+                width: 96, height: 96, borderRadius: 48,
+                backgroundColor: colors.primary + "15",
+                borderWidth: 2, borderColor: colors.primary + "40",
+                borderStyle: "dashed",
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <IconSymbol name="camera.fill" size={24} color={colors.primary} />
+              <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>Add Photo</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 

@@ -6,6 +6,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -54,6 +55,7 @@ export default function MemberProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const { getPersonById, getParents, getChildren, getSpouses, getSiblings, deletePerson, data, setRootPerson } = useFamily();
+  const { t } = useI18n();
 
   const person = getPersonById(id || "");
   if (!person) {
@@ -149,13 +151,13 @@ export default function MemberProfileScreen() {
         </View>
 
         {/* Quick Actions */}
-        <View className="flex-row gap-2 mb-6">
+        <View className="flex-row gap-2 mb-4">
           <Pressable
             onPress={() => router.push({ pathname: "/add-member" as any, params: { parentId: person.id } })}
             style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
           >
             <View className="bg-primary/10 rounded-xl py-3 items-center">
-              <Text className="text-xs font-medium" style={{ color: colors.primary }}>+ Child</Text>
+              <Text className="text-xs font-medium" style={{ color: colors.primary }}>{t("addChild")}</Text>
             </View>
           </Pressable>
           <Pressable
@@ -163,7 +165,7 @@ export default function MemberProfileScreen() {
             style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
           >
             <View className="bg-primary/10 rounded-xl py-3 items-center">
-              <Text className="text-xs font-medium" style={{ color: colors.primary }}>+ Spouse</Text>
+              <Text className="text-xs font-medium" style={{ color: colors.primary }}>{t("addSpouse")}</Text>
             </View>
           </Pressable>
           <Pressable
@@ -171,20 +173,27 @@ export default function MemberProfileScreen() {
             style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
           >
             <View className="bg-primary/10 rounded-xl py-3 items-center">
-              <Text className="text-xs font-medium" style={{ color: colors.primary }}>+ Parent</Text>
+              <Text className="text-xs font-medium" style={{ color: colors.primary }}>{t("addParent")}</Text>
             </View>
           </Pressable>
-          {!isRoot && (
-            <Pressable
-              onPress={() => { setRootPerson(person.id); Alert.alert("Root Updated", `${person.firstName} is now the root of the tree.`); }}
-              style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
-            >
-              <View className="rounded-xl py-3 items-center" style={{ backgroundColor: colors.accent + "18" }}>
-                <Text className="text-xs font-medium" style={{ color: colors.accent }}>Set Root</Text>
-              </View>
-            </Pressable>
-          )}
         </View>
+
+        {/* View as Root / Set Root */}
+        {!isRoot && (
+          <Pressable
+            onPress={() => {
+              setRootPerson(person.id);
+              Alert.alert(t("setRoot"), `${person.firstName} ${t("viewAsRootDesc")}`);
+            }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+          >
+            <View className="flex-row items-center justify-center gap-2 rounded-xl py-3 mb-6" style={{ backgroundColor: colors.accent + "15", borderWidth: 1, borderColor: colors.accent + "30" }}>
+              <IconSymbol name="tree" size={16} color={colors.accent} />
+              <Text className="text-sm font-semibold" style={{ color: colors.accent }}>{t("viewAsRoot")}</Text>
+            </View>
+          </Pressable>
+        )}
+        {isRoot && <View className="mb-2" />}
 
         {/* Personal Details */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Personal Details</Text>

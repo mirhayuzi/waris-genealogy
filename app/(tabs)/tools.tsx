@@ -4,6 +4,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useFamily } from "@/lib/family-store";
+import { useI18n } from "@/lib/i18n";
 import { exportFamilyTreePDF, printFamilyTree } from "@/lib/pdf-export";
 import { useState } from "react";
 
@@ -41,6 +42,7 @@ export default function ToolsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data } = useFamily();
+  const { t } = useI18n();
   const [exporting, setExporting] = useState(false);
 
   const muslimCount = data.persons.filter((p) => p.religion === "Islam").length;
@@ -75,63 +77,91 @@ export default function ToolsScreen() {
   return (
     <ScreenContainer className="px-5 pt-2">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-        <Text className="text-2xl font-bold text-foreground mb-1">Tools</Text>
-        <Text className="text-sm text-muted mb-6">Powerful features for your family tree</Text>
+        <Text className="text-2xl font-bold text-foreground mb-1">{t("tools")}</Text>
+        <Text className="text-sm text-muted mb-6">{t("powerfulFeatures")}</Text>
 
         {/* Islamic Tools Section */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Islamic Tools</Text>
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{t("islamicTools")}</Text>
         <View className="gap-3 mb-6">
           <ToolCard
-            title="Faraid Calculator"
-            description="Calculate Islamic inheritance distribution"
+            title={t("faraidCalculator")}
+            description={t("calcIslamicInheritance")}
             icon="chart.pie.fill"
             color={colors.primary}
             onPress={() => router.push("/faraid-calculator" as any)}
           />
           <ToolCard
-            title="Mahram Checker"
-            description="Check Mahram relationships between two people"
+            title={t("mahramChecker")}
+            description={t("checkMahramRelationships")}
             icon="person.2.fill"
             color={colors.accent}
             onPress={() => router.push("/mahram-checker" as any)}
           />
         </View>
 
-        {/* Export & Print Section */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Export & Print</Text>
+        {/* Views Section */}
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
+          {t("familyTree")}
+        </Text>
         <View className="gap-3 mb-6">
           <ToolCard
-            title="Export Family Tree PDF"
-            description="Generate a printable family tree report"
+            title={t("familyTimeline")}
+            description={t("viewChronologicalEvents")}
+            icon="clock.fill"
+            color="#FF6B35"
+            onPress={() => router.push("/family-timeline" as any)}
+          />
+          <ToolCard
+            title={t("millerColumns")}
+            description={t("selectMember")}
+            icon="list.bullet"
+            color="#5856D6"
+            onPress={() => router.push("/miller-columns" as any)}
+          />
+        </View>
+
+        {/* Export & Print Section */}
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{t("exportPrint")}</Text>
+        <View className="gap-3 mb-6">
+          <ToolCard
+            title={t("exportFamilyTreePDF")}
+            description={t("generatePrintableReport")}
             icon="arrow.down.doc.fill"
             color="#E65100"
             onPress={handleExportPDF}
             loading={exporting}
           />
           <ToolCard
-            title="Print Family Tree"
-            description="Print your family tree directly"
+            title={t("printFamilyTree")}
+            description={t("printDirectly")}
             icon="doc.text.fill"
             color="#FF9500"
             onPress={handlePrint}
           />
         </View>
 
-        {/* Family Tools Section */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Family Management</Text>
+        {/* Family Management Section */}
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{t("familyManagement")}</Text>
         <View className="gap-3 mb-6">
           <ToolCard
-            title="Invite Family"
-            description="Share your tree with siblings and relatives"
+            title={t("inviteFamily")}
+            description={t("shareTreeWithRelatives")}
             icon="envelope.fill"
             color="#5856D6"
             onPress={() => router.push("/invite-family" as any)}
           />
           <ToolCard
-            title="Family Statistics"
-            description={`${data.persons.length} members · ${muslimCount} Muslim`}
-            icon="info.circle.fill"
+            title={t("backupRestore")}
+            description={t("backupRestoreDesc")}
+            icon="arrow.down.doc.fill"
             color="#34C759"
+            onPress={() => router.push("/backup-restore" as any)}
+          />
+          <ToolCard
+            title={t("familyStatistics")}
+            description={`${data.persons.length} ${t("members")} · ${muslimCount} Muslim`}
+            icon="info.circle.fill"
+            color="#007AFF"
             onPress={() => {}}
           />
         </View>

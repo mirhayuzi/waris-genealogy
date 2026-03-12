@@ -26,3 +26,11 @@
 - [x] Feature: Photo support for family members (camera/gallery)
 - [x] Feature: PDF export for family tree and Faraid reports
 - [x] Feature: Search/filter on Home and Tree screens
+- [x] Bug: Photo not saving after camera/gallery selection (only edit/crop/rotate shown, no save)
+- [x] Feature: Family Timeline view (chronological births, marriages, deaths)
+- [x] Feature: Backup/Restore via JSON export with Google Drive/Gmail sharing
+- [x] Feature: Multi-language support (BM/English toggle)
+- [x] Feature: Miller Columns view as alternative tree navigation
+- [x] Feature: Tree node tap navigates to member profile
+- [x] Feature: Profile button to set member as root and view their family tree
+- [x] Feature: Zoomable family tree (pinch-to-zoom and zoom buttons)
