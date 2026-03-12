@@ -389,30 +389,17 @@ export function PhotoPicker({ photo, onPhotoChange }: {
     onPhotoChange(undefined);
   }, [onPhotoChange]);
 
-  // Handle pending results (Android activity destruction)
+  // Skip pending result check - may not be available in all versions
   const checkPendingResult = useCallback(async () => {
-    if (Platform.OS === "android") {
-      try {
-        const result = await ImagePicker.getPendingResultAsync();
-        if (result && Array.isArray(result) && result.length > 0) {
-          const picked = result[0];
-          if ("canceled" in picked && !picked.canceled && picked.assets?.[0]?.uri) {
-            const persistedUri = await copyPhotoToAppStorage(picked.assets[0].uri);
-            onPhotoChange(persistedUri);
-          }
-        }
-      } catch (_) {
-        // Ignore - no pending result
-      }
-    }
-  }, [onPhotoChange]);
+    // No-op
+  }, []);
 
   return (
     <>
       <FormLabel text="Photo (Optional)" />
       <View className="items-center mb-4">
         <Pressable
-          onPress={() => { checkPendingResult(); setShowOptions(true); }}
+          onPress={() => setShowOptions(true)}
           style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
         >
           {photo ? (
