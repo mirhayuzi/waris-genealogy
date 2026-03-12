@@ -5,6 +5,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Gender, Religion, PREFIXES, ETHNICITIES, Person, getDisplayName } from "@/lib/types";
 import { useState, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 
 // ---- Shared Form Components ----
 
@@ -285,28 +286,31 @@ function parseDateString(s: string): { year: number; month: number; day: number 
   return null;
 }
 
-// ---- Photo Picker (Fixed for device camera/gallery) ----
+// ---- Photo Picker (Robust Android fix) ----
 
-async function copyPhotoToAppStorage(sourceUri: string): Promise<string> {
-  // On web, just return the URI as-is (blob or data URI)
-  if (Platform.OS === "web") {
-    return sourceUri;
-  }
+// Persist photo using base64 to avoid content:// URI issues on Android
+async function persistPhoto(sourceUri: string): Promise<string> {
+  if (Platform.OS === "web") return sourceUri;
 
-  // On native, copy to a persistent location using fetch + base64
-  // This avoids issues with temporary camera URIs being deleted
   try {
-    const FileSystem = require("expo-file-system/legacy");
-    if (!FileSystem.documentDirectory) {
-      return sourceUri;
-    }
+    const docDir = FileSystem.documentDirectory;
+    if (!docDir) return sourceUri;
+
+    // Read the source as base64 (works with content:// URIs on Android)
+    const base64 = await FileSystem.readAsStringAsync(sourceUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Write to app's document directory as a new file
     const fileName = `photo_${Date.now()}.jpg`;
-    const destUri = `${FileSystem.documentDirectory}${fileName}`;
-    await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+    const destUri = `${docDir}${fileName}`;
+    await FileSystem.writeAsStringAsync(destUri, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
     return destUri;
   } catch (e) {
-    // If copy fails, return original URI
-    console.warn("Failed to copy photo to app storage:", e);
+    console.warn("persistPhoto fallback to original URI:", e);
     return sourceUri;
   }
 }
@@ -323,7 +327,6 @@ export function PhotoPicker({ photo, onPhotoChange }: {
     setShowOptions(false);
     setLoading(true);
     try {
-      // Request permission first
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Required", "Please allow access to your photo library in Settings.");
@@ -331,22 +334,41 @@ export function PhotoPicker({ photo, onPhotoChange }: {
         return;
       }
 
+      // Use base64:true so we always get data even if URI is content://
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.6,
+        base64: true,
         exif: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        const persistedUri = await copyPhotoToAppStorage(uri);
-        onPhotoChange(persistedUri);
+        const asset = result.assets[0];
+        if (asset.base64) {
+          // Save base64 directly to file system using static import
+          try {
+            const docDir = FileSystem.documentDirectory;
+            if (docDir) {
+              const fileName = `photo_${Date.now()}.jpg`;
+              const destUri = `${docDir}${fileName}`;
+              await FileSystem.writeAsStringAsync(destUri, asset.base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              onPhotoChange(destUri);
+            } else {
+              onPhotoChange(asset.uri);
+            }
+          } catch {
+            onPhotoChange(asset.uri);
+          }
+        } else {
+          // No base64, try to persist the URI
+          const persisted = await persistPhoto(asset.uri);
+          onPhotoChange(persisted);
+        }
       }
     } catch (e: any) {
       console.error("Gallery picker error:", e);
-      Alert.alert("Error", "Failed to pick image from gallery. Please try again.");
+      Alert.alert("Error", `Failed to pick image: ${e?.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
@@ -358,27 +380,44 @@ export function PhotoPicker({ photo, onPhotoChange }: {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Camera permission is needed to take photos. Please enable it in Settings.");
+        Alert.alert("Permission Required", "Camera permission is needed. Please enable it in Settings.");
         setLoading(false);
         return;
       }
 
+      // Use base64:true for reliable data capture
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.6,
+        base64: true,
         exif: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        const persistedUri = await copyPhotoToAppStorage(uri);
-        onPhotoChange(persistedUri);
+        const asset = result.assets[0];
+        if (asset.base64) {
+          try {
+            const docDir = FileSystem.documentDirectory;
+            if (docDir) {
+              const fileName = `photo_${Date.now()}.jpg`;
+              const destUri = `${docDir}${fileName}`;
+              await FileSystem.writeAsStringAsync(destUri, asset.base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              onPhotoChange(destUri);
+            } else {
+              onPhotoChange(asset.uri);
+            }
+          } catch {
+            onPhotoChange(asset.uri);
+          }
+        } else {
+          const persisted = await persistPhoto(asset.uri);
+          onPhotoChange(persisted);
+        }
       }
     } catch (e: any) {
       console.error("Camera error:", e);
-      Alert.alert("Error", "Failed to take photo. Please try again.");
+      Alert.alert("Error", `Failed to take photo: ${e?.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
@@ -388,11 +427,6 @@ export function PhotoPicker({ photo, onPhotoChange }: {
     setShowOptions(false);
     onPhotoChange(undefined);
   }, [onPhotoChange]);
-
-  // Skip pending result check - may not be available in all versions
-  const checkPendingResult = useCallback(async () => {
-    // No-op
-  }, []);
 
   return (
     <>

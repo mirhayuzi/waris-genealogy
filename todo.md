@@ -40,3 +40,4 @@
 - [x] Bug: Photo gallery picker crash - Fixed: added missing Platform/Alert imports, removed getPendingResultAsync
 - [x] Bug: Google Drive send error - Fixed: proper error handling and imports
 - [x] Bug: JSON export error - Fixed: proper FileSystem imports and null checks
+- [x] Bug: Photo upload STILL failing - ROOT CAUSE: dynamic require() fails at runtime; fixed with static import from expo-file-system/legacy + base64 persistence

@@ -8,6 +8,8 @@ import { useI18n } from "@/lib/i18n";
 import { useState, useEffect } from "react";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as MailComposer from "expo-mail-composer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FamilyData } from "@/lib/types";
 
@@ -66,7 +68,6 @@ export default function BackupRestoreScreen() {
       }
 
       // On native, use FileSystem
-      const FileSystem = require("expo-file-system/legacy");
       if (!FileSystem.documentDirectory) {
         throw new Error("Document directory not available on this platform");
       }
@@ -149,7 +150,6 @@ export default function BackupRestoreScreen() {
             return;
           }
         } else {
-          const FileSystem = require("expo-file-system/legacy");
           content = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
         }
 
@@ -200,7 +200,6 @@ export default function BackupRestoreScreen() {
       if (filePath) {
         if (Platform.OS !== "web") {
           try {
-            const MailComposer = require("expo-mail-composer");
             const isAvailable = await MailComposer.isAvailableAsync();
             if (isAvailable) {
               await MailComposer.composeAsync({
@@ -284,7 +283,6 @@ export default function BackupRestoreScreen() {
             return;
           }
         } else {
-          const FileSystem = require("expo-file-system/legacy");
           content = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
         }
 
