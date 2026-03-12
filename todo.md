@@ -37,3 +37,6 @@
 - [x] Bug: Photo upload error from camera and gallery (fixed: use correct mediaTypes API for SDK 54)
 - [x] Bug: Backup creation error (fixed: platform-safe FileSystem handling + web fallback)
 - [x] Feature: Redesign import/export like Fuelio app Google Drive sync settings
+- [x] Bug: Photo gallery picker crash - Fixed: use ImagePicker.MediaTypeOptions.Images enum
+- [x] Bug: Google Drive send error - Fixed: improved error handling for share cancellation
+- [x] Bug: JSON export error - Fixed: added null check for documentDirectory

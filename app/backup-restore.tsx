@@ -67,6 +67,9 @@ export default function BackupRestoreScreen() {
 
       // On native, use FileSystem
       const FileSystem = require("expo-file-system/legacy");
+      if (!FileSystem.documentDirectory) {
+        throw new Error("Document directory not available on this platform");
+      }
       const json = createBackupJSON();
       const fileName = `waris-backup-${new Date().toISOString().split("T")[0]}.json`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
@@ -95,12 +98,19 @@ export default function BackupRestoreScreen() {
       if (filePath) {
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(filePath, {
-            mimeType: "application/json",
-            dialogTitle: "Save to Google Drive",
-            UTI: "public.json",
-          });
-          setBackupSuccess(true);
+          try {
+            await Sharing.shareAsync(filePath, {
+              mimeType: "application/json",
+              dialogTitle: "Save to Google Drive or Email",
+              UTI: "public.json",
+            });
+            setBackupSuccess(true);
+            Alert.alert("Success", "Backup shared successfully.");
+          } catch (shareError: any) {
+            if (shareError.message !== "User did not share") {
+              throw shareError;
+            }
+          }
         } else {
           Alert.alert("Success", "Backup file saved locally. Sharing is not available on this platform.");
         }
