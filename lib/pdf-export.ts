@@ -1,5 +1,4 @@
 import * as Print from "expo-print";
-import { shareAsync } from "expo-sharing";
 import { Platform } from "react-native";
 import { FamilyData, Person, getDisplayName } from "./types";
 
@@ -204,13 +203,8 @@ function generateFaraidHTML(
 
 export async function exportFamilyTreePDF(data: FamilyData) {
   const html = generateFamilyTreeHTML(data);
-
-  if (Platform.OS === "web") {
-    await Print.printAsync({ html });
-  } else {
-    const { uri } = await Print.printToFileAsync({ html });
-    await shareAsync(uri, { UTI: ".pdf", mimeType: "application/pdf" });
-  }
+  // Use printAsync which opens system print dialog (includes Save as PDF / Share options)
+  await Print.printAsync({ html });
 }
 
 export async function exportFaraidPDF(
@@ -220,13 +214,8 @@ export async function exportFaraidPDF(
   heirs: FaraidResult[]
 ) {
   const html = generateFaraidHTML(familyName, deceasedName, totalEstate, heirs);
-
-  if (Platform.OS === "web") {
-    await Print.printAsync({ html });
-  } else {
-    const { uri } = await Print.printToFileAsync({ html });
-    await shareAsync(uri, { UTI: ".pdf", mimeType: "application/pdf" });
-  }
+  // Use printAsync which opens system print dialog (includes Save as PDF / Share options)
+  await Print.printAsync({ html });
 }
 
 export async function printFamilyTree(data: FamilyData) {

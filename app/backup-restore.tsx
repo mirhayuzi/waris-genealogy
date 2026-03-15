@@ -22,7 +22,7 @@ import {
 
 // Lazy-load native modules
 let FileSystem: any = null;
-let Sharing: any = null;
+// expo-sharing removed - incompatible with SDK 54 (FilePermissionService removed)
 let MailComposer: any = null;
 let DocumentPicker: any = null;
 let WebBrowser: any = null;
@@ -30,7 +30,7 @@ let AuthSession: any = null;
 let Crypto: any = null;
 
 try { FileSystem = require("expo-file-system/legacy"); } catch {}
-try { Sharing = require("expo-sharing"); } catch {}
+// expo-sharing removed - causes crash on Android
 try { MailComposer = require("expo-mail-composer"); } catch {}
 try { DocumentPicker = require("expo-document-picker"); } catch {}
 try { WebBrowser = require("expo-web-browser"); } catch {}
@@ -396,20 +396,13 @@ export default function BackupRestoreScreen() {
         Alert.alert(lang === "bm" ? "Berjaya" : "Success", lang === "bm" ? "Fail CSV dimuat turun." : "CSV file downloaded.");
       } else {
         const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
-        if (result.success && result.folderPath && Sharing) {
-          try {
-            const canShare = await Sharing.isAvailableAsync();
-            if (canShare) {
-              await Sharing.shareAsync(`${result.folderPath}/members.csv`, {
-                mimeType: "text/csv",
-                dialogTitle: lang === "bm" ? "Simpan Sandaran Waris" : "Save Waris Backup",
-              });
-            }
-          } catch (shareErr: any) {
-            if (!shareErr?.message?.includes("cancel") && !shareErr?.message?.includes("User did not share")) {
-              Alert.alert(lang === "bm" ? "Ralat" : "Error", shareErr?.message || "Share failed");
-            }
-          }
+        if (result.success) {
+          Alert.alert(
+            lang === "bm" ? "Berjaya" : "Success",
+            lang === "bm"
+              ? "Fail CSV disimpan dalam storan aplikasi. Gunakan 'Hantar ke Google Drive' untuk sandaran awan."
+              : "CSV files saved to app storage. Use 'Send to Google Drive' for cloud backup."
+          );
         }
       }
     } catch (e: any) {

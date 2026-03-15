@@ -65,3 +65,5 @@
 - [x] Feature: Direct Google Drive API upload/download CSV (not share sheet)
 - [x] Feature: Fuelio-style backup UI with Sign In/Sign Out, signed-in user display
 - [x] Bug: Fix ExpoSharing.shareAsync error on Android (replaced with direct Drive API)
+- [x] Feature: Create reusable skill for Google Drive CSV backup integration
+- [x] Bug: APK crashes immediately on launch - removed expo-sharing (FilePermissionService incompatible with SDK 54)

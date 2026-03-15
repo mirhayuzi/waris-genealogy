@@ -56,25 +56,9 @@ export default function SettingsScreen() {
     try {
       const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
       if (result.success) {
-        let shared = false;
-        if (Platform.OS !== "web" && result.folderPath) {
-          try {
-            const Sharing = require("expo-sharing");
-            if (Sharing) {
-              const canShare = await Sharing.isAvailableAsync();
-              if (canShare) {
-                await Sharing.shareAsync(`${result.folderPath}/members.csv`, {
-                  mimeType: "text/csv",
-                  dialogTitle: lang === "bm" ? "Simpan Fail CSV" : "Save CSV Files",
-                });
-                shared = true;
-              }
-            }
-          } catch (_) {}
-        }
         Alert.alert(
           lang === "bm" ? "Berjaya!" : "Success!",
-          result.message + (shared ? "" : (lang === "bm" ? "\n\nFail disimpan dalam storan aplikasi." : "\n\nFiles saved to app storage."))
+          result.message + (lang === "bm" ? "\n\nFail disimpan dalam storan aplikasi. Gunakan Backup & Restore untuk hantar ke Google Drive." : "\n\nFiles saved to app storage. Use Backup & Restore to send to Google Drive.")
         );
       } else {
         Alert.alert(lang === "bm" ? "Ralat" : "Error", result.message);
