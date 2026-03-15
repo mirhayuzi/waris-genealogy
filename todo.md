@@ -61,3 +61,7 @@
 - [x] Feature: Change backup save format from JSON to CSV (Fuelio-style)
 - [x] Feature: CSV restore/import functionality
 - [x] Feature: Fuelio-style backup-restore UI with CSV files
+- [x] Feature: Google Sign-In for Google Drive backup (like Fuelio)
+- [x] Feature: Direct Google Drive API upload/download CSV (not share sheet)
+- [x] Feature: Fuelio-style backup UI with Sign In/Sign Out, signed-in user display
+- [x] Bug: Fix ExpoSharing.shareAsync error on Android (replaced with direct Drive API)
