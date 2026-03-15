@@ -6,12 +6,19 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { useI18n } from "@/lib/i18n";
 import { useState, useEffect } from "react";
-import * as Sharing from "expo-sharing";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
-import * as MailComposer from "expo-mail-composer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FamilyData } from "@/lib/types";
+
+// Lazy-load native modules to prevent crashes if not available
+let FileSystem: any = null;
+let Sharing: any = null;
+let MailComposer: any = null;
+let DocumentPicker: any = null;
+
+try { FileSystem = require("expo-file-system/legacy"); } catch {}
+try { Sharing = require("expo-sharing"); } catch {}
+try { MailComposer = require("expo-mail-composer"); } catch {}
+try { DocumentPicker = require("expo-document-picker"); } catch {}
 
 const BACKUP_DATE_KEY = "@waris_last_backup";
 const BACKUP_AUTO_KEY = "@waris_auto_backup";
@@ -49,38 +56,55 @@ export default function BackupRestoreScreen() {
     return JSON.stringify(data, null, 2);
   };
 
+  // Write backup file to device storage and return the file path
   const writeBackupFile = async (): Promise<string | null> => {
-    try {
-      if (Platform.OS === "web") {
-        // On web, use blob download
-        const json = createBackupJSON();
+    const json = createBackupJSON();
+    const fileName = `waris-backup-${new Date().toISOString().split("T")[0]}.json`;
+
+    if (Platform.OS === "web") {
+      // On web, trigger browser download
+      try {
         const blob = new Blob([json], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `waris-backup-${new Date().toISOString().split("T")[0]}.json`;
+        a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
         const now = new Date().toLocaleString("en-MY");
         await AsyncStorage.setItem(BACKUP_DATE_KEY, now);
         setLastBackup(now);
-        return null; // Already downloaded on web
+      } catch (e: any) {
+        Alert.alert("Error", `Web download failed: ${e?.message || "Unknown"}`);
+      }
+      return null;
+    }
+
+    // On native, try FileSystem
+    if (!FileSystem) {
+      Alert.alert("Error", "File system is not available. Please try sharing via email instead.");
+      return null;
+    }
+
+    try {
+      // Try documentDirectory first, then cacheDirectory as fallback
+      const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      if (!dir) {
+        Alert.alert("Error", "No writable directory available on this device.");
+        return null;
       }
 
-      // On native, use FileSystem
-      if (!FileSystem.documentDirectory) {
-        throw new Error("Document directory not available on this platform");
-      }
-      const json = createBackupJSON();
-      const fileName = `waris-backup-${new Date().toISOString().split("T")[0]}.json`;
-      const filePath = `${FileSystem.documentDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(filePath, json, { encoding: FileSystem.EncodingType.UTF8 });
+      const filePath = `${dir}${fileName}`;
+      await FileSystem.writeAsStringAsync(filePath, json, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
       const now = new Date().toLocaleString("en-MY");
       await AsyncStorage.setItem(BACKUP_DATE_KEY, now);
       setLastBackup(now);
       return filePath;
     } catch (e: any) {
-      console.error("Backup file creation error:", e);
+      console.error("writeBackupFile error:", e);
       Alert.alert("Error", `Failed to create backup file: ${e?.message || "Unknown error"}`);
       return null;
     }
@@ -96,32 +120,38 @@ export default function BackupRestoreScreen() {
     setBackupSuccess(false);
     try {
       const filePath = await writeBackupFile();
-      if (filePath) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          try {
+      if (!filePath && Platform.OS !== "web") {
+        setExporting(false);
+        return;
+      }
+      if (filePath && Sharing) {
+        try {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
             await Sharing.shareAsync(filePath, {
               mimeType: "application/json",
-              dialogTitle: "Save to Google Drive or Email",
+              dialogTitle: "Save to Google Drive",
               UTI: "public.json",
             });
             setBackupSuccess(true);
-            Alert.alert("Success", "Backup shared successfully.");
-          } catch (shareError: any) {
-            if (shareError.message !== "User did not share") {
-              throw shareError;
-            }
+          } else {
+            Alert.alert("Saved", "Backup file saved locally. Sharing not available.");
           }
-        } else {
-          Alert.alert("Success", "Backup file saved locally. Sharing is not available on this platform.");
+        } catch (shareErr: any) {
+          // User cancelled share - not an error
+          if (shareErr?.message?.includes("User did not share") || shareErr?.message?.includes("cancel")) {
+            // Silently ignore cancellation
+          } else {
+            Alert.alert("Share Error", `${shareErr?.message || "Unknown share error"}`);
+          }
         }
       } else if (Platform.OS === "web") {
         setBackupSuccess(true);
-        Alert.alert("Success", "Backup file downloaded successfully.");
+        Alert.alert("Success", "Backup file downloaded.");
       }
     } catch (e: any) {
-      console.error("Send to Drive error:", e);
-      Alert.alert("Error", `Failed to send to Google Drive: ${e?.message || "Unknown error"}`);
+      console.error("handleSendToDrive error:", e);
+      Alert.alert("Error", `Failed: ${e?.message || "Unknown error"}`);
     } finally {
       setExporting(false);
     }
@@ -129,60 +159,74 @@ export default function BackupRestoreScreen() {
 
   // ---- SYNCHRONIZE: Download from Google Drive (via document picker) ----
   const handleDownloadFromDrive = async () => {
+    if (!DocumentPicker) {
+      Alert.alert("Error", "Document picker is not available on this device.");
+      return;
+    }
     setImporting(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "application/json",
+        type: ["application/json", "*/*"],
         copyToCacheDirectory: true,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const fileUri = result.assets[0].uri;
-        let content: string;
-
-        if (Platform.OS === "web") {
-          // On web, read from the file object
-          const file = result.assets[0].file;
-          if (file) {
-            content = await file.text();
-          } else {
-            Alert.alert("Error", "Could not read the selected file on web.");
-            return;
-          }
-        } else {
-          content = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
-        }
-
-        const parsed = JSON.parse(content) as FamilyData;
-
-        if (!parsed.persons || !Array.isArray(parsed.persons)) {
-          Alert.alert("Invalid File", "The selected file does not contain valid Waris family data.");
-          return;
-        }
-
-        Alert.alert(
-          "Restore from Google Drive",
-          `This will replace all current data with the backup containing ${parsed.persons.length} members and ${parsed.marriages.length} marriages.\n\nThis action cannot be undone.`,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Restore",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
-                  Alert.alert("Restored", `Successfully restored ${parsed.persons.length} members. Please restart the app to see changes.`);
-                } catch (e) {
-                  Alert.alert("Error", "Failed to restore data.");
-                }
-              },
-            },
-          ]
-        );
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setImporting(false);
+        return;
       }
+
+      const asset = result.assets[0];
+      let content: string;
+
+      if (Platform.OS === "web" && asset.file) {
+        content = await asset.file.text();
+      } else if (FileSystem) {
+        content = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      } else {
+        Alert.alert("Error", "Cannot read file on this platform.");
+        setImporting(false);
+        return;
+      }
+
+      let parsed: FamilyData;
+      try {
+        parsed = JSON.parse(content) as FamilyData;
+      } catch {
+        Alert.alert("Invalid File", "The selected file is not valid JSON. Please select a Waris backup file.");
+        setImporting(false);
+        return;
+      }
+
+      if (!parsed.persons || !Array.isArray(parsed.persons)) {
+        Alert.alert("Invalid File", "The file does not contain valid Waris family data.");
+        setImporting(false);
+        return;
+      }
+
+      Alert.alert(
+        "Restore Data",
+        `Found ${parsed.persons.length} members and ${parsed.marriages?.length || 0} marriages.\n\nThis will replace ALL current data. Continue?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Restore",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
+                Alert.alert("Restored", `Successfully restored ${parsed.persons.length} members.\n\nPlease restart the app to see changes.`);
+              } catch (e) {
+                Alert.alert("Error", "Failed to restore data.");
+              }
+            },
+          },
+        ]
+      );
     } catch (e: any) {
-      console.error("Download from Drive error:", e);
-      Alert.alert("Error", `Failed to read backup file: ${e?.message || "Unknown error"}`);
+      console.error("handleDownloadFromDrive error:", e);
+      Alert.alert("Error", `Failed to read backup: ${e?.message || "Unknown error"}`);
     } finally {
       setImporting(false);
     }
@@ -197,8 +241,13 @@ export default function BackupRestoreScreen() {
     setExporting(true);
     try {
       const filePath = await writeBackupFile();
-      if (filePath) {
-        if (Platform.OS !== "web") {
+      if (!filePath && Platform.OS !== "web") {
+        setExporting(false);
+        return;
+      }
+      if (filePath && Platform.OS !== "web") {
+        // Try MailComposer first
+        if (MailComposer) {
           try {
             const isAvailable = await MailComposer.isAvailableAsync();
             if (isAvailable) {
@@ -207,26 +256,37 @@ export default function BackupRestoreScreen() {
                 body: `Attached is the family tree backup for "${data.familyName}" containing ${data.persons.length} members.\n\nGenerated by Waris Genealogy App.`,
                 attachments: [filePath],
               });
+              setExporting(false);
               return;
             }
           } catch (_) {
-            // MailComposer not available, fall through to sharing
+            // MailComposer failed, fall through to sharing
           }
         }
-        // Fallback to sharing
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(filePath, {
-            mimeType: "application/json",
-            dialogTitle: "Share Waris Backup via Email",
-          });
+        // Fallback to Sharing
+        if (Sharing) {
+          try {
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+              await Sharing.shareAsync(filePath, {
+                mimeType: "application/json",
+                dialogTitle: "Share Waris Backup via Email",
+              });
+            } else {
+              Alert.alert("Not Available", "No email or sharing option available.");
+            }
+          } catch (shareErr: any) {
+            if (!shareErr?.message?.includes("cancel") && !shareErr?.message?.includes("User did not share")) {
+              Alert.alert("Error", shareErr?.message || "Share failed");
+            }
+          }
         } else {
-          Alert.alert("Email Not Available", "No email client is configured. The backup has been saved locally.");
+          Alert.alert("Not Available", "Sharing is not available on this device.");
         }
       }
     } catch (e: any) {
-      console.error("Email share error:", e);
-      Alert.alert("Error", `Failed to share via email: ${e?.message || "Unknown error"}`);
+      console.error("handleShareViaEmail error:", e);
+      Alert.alert("Error", `Failed: ${e?.message || "Unknown error"}`);
     } finally {
       setExporting(false);
     }
@@ -241,18 +301,26 @@ export default function BackupRestoreScreen() {
     setExporting(true);
     try {
       const filePath = await writeBackupFile();
-      if (filePath) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(filePath, {
-            mimeType: "application/json",
-            dialogTitle: "Save Waris Backup",
-          });
-        } else {
-          Alert.alert("Backup Created", "Backup file saved to app storage.");
+      if (filePath && Sharing) {
+        try {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(filePath, {
+              mimeType: "application/json",
+              dialogTitle: "Save Waris Backup",
+            });
+          } else {
+            Alert.alert("Saved", "Backup file saved to app storage.");
+          }
+        } catch (shareErr: any) {
+          if (!shareErr?.message?.includes("cancel") && !shareErr?.message?.includes("User did not share")) {
+            Alert.alert("Error", shareErr?.message || "Share failed");
+          }
         }
       } else if (Platform.OS === "web") {
         Alert.alert("Success", "Backup file downloaded.");
+      } else if (!filePath) {
+        // writeBackupFile already showed error
       }
     } catch (e: any) {
       Alert.alert("Error", `Failed to export: ${e?.message || "Unknown error"}`);
@@ -263,6 +331,10 @@ export default function BackupRestoreScreen() {
 
   // ---- SELECTIVE: Import JSON from local ----
   const handleImportLocal = async () => {
+    if (!DocumentPicker) {
+      Alert.alert("Error", "Document picker is not available.");
+      return;
+    }
     setImporting(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -270,51 +342,62 @@ export default function BackupRestoreScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const fileUri = result.assets[0].uri;
-        let content: string;
-
-        if (Platform.OS === "web") {
-          const file = result.assets[0].file;
-          if (file) {
-            content = await file.text();
-          } else {
-            Alert.alert("Error", "Could not read the selected file.");
-            return;
-          }
-        } else {
-          content = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
-        }
-
-        const parsed = JSON.parse(content) as FamilyData;
-
-        if (!parsed.persons || !Array.isArray(parsed.persons)) {
-          Alert.alert("Invalid File", "The selected file does not contain valid Waris family data.\n\nPlease select a .json file exported from Waris app.");
-          return;
-        }
-
-        Alert.alert(
-          "Import Data",
-          `Found ${parsed.persons.length} members and ${parsed.marriages.length} marriages.\n\nThis will replace all current data. Continue?`,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Import",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
-                  Alert.alert("Imported", `Successfully imported ${parsed.persons.length} members. Please restart the app to see changes.`);
-                } catch (e) {
-                  Alert.alert("Error", "Failed to import data.");
-                }
-              },
-            },
-          ]
-        );
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setImporting(false);
+        return;
       }
+
+      const asset = result.assets[0];
+      let content: string;
+
+      if (Platform.OS === "web" && asset.file) {
+        content = await asset.file.text();
+      } else if (FileSystem) {
+        content = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      } else {
+        Alert.alert("Error", "Cannot read file on this platform.");
+        setImporting(false);
+        return;
+      }
+
+      let parsed: FamilyData;
+      try {
+        parsed = JSON.parse(content) as FamilyData;
+      } catch {
+        Alert.alert("Invalid File", "The file is not valid JSON.");
+        setImporting(false);
+        return;
+      }
+
+      if (!parsed.persons || !Array.isArray(parsed.persons)) {
+        Alert.alert("Invalid File", "The file does not contain valid Waris data.");
+        setImporting(false);
+        return;
+      }
+
+      Alert.alert(
+        "Import Data",
+        `Found ${parsed.persons.length} members and ${parsed.marriages?.length || 0} marriages.\n\nThis will replace ALL current data. Continue?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Import",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
+                Alert.alert("Imported", `Successfully imported ${parsed.persons.length} members.\n\nPlease restart the app to see changes.`);
+              } catch (e) {
+                Alert.alert("Error", "Failed to import data.");
+              }
+            },
+          },
+        ]
+      );
     } catch (e: any) {
-      console.error("Import error:", e);
+      console.error("handleImportLocal error:", e);
       Alert.alert("Error", `Failed to import: ${e?.message || "Unknown error"}`);
     } finally {
       setImporting(false);
@@ -365,7 +448,7 @@ export default function BackupRestoreScreen() {
         {/* ===== SYNCHRONIZE SECTION (Fuelio-style) ===== */}
         <Text className="text-xs font-bold text-muted uppercase tracking-widest mb-1">SYNCHRONIZE</Text>
         <Text className="text-xs text-muted mb-4">
-          Sync all your family data with Google Drive. When downloading from Google Drive, all current data will be overwritten.
+          Sync your family data via Google Drive. Tap "Send" to upload, or "Download" to pick a backup file from Drive or device.
         </Text>
 
         {/* Send to Google Drive */}

@@ -4,7 +4,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Gender, Religion, PREFIXES, ETHNICITIES, Person, getDisplayName } from "@/lib/types";
 import { useState, useCallback } from "react";
-import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 
 // ---- Shared Form Components ----
@@ -286,22 +286,20 @@ function parseDateString(s: string): { year: number; month: number; day: number 
   return null;
 }
 
-// ---- Photo Picker (Robust Android fix) ----
+// ---- Photo Picker (Using DocumentPicker - no native ImagePicker dependency) ----
 
-// Persist photo using base64 to avoid content:// URI issues on Android
-async function persistPhoto(sourceUri: string): Promise<string> {
+async function persistPhotoFromUri(sourceUri: string): Promise<string> {
   if (Platform.OS === "web") return sourceUri;
-
   try {
     const docDir = FileSystem.documentDirectory;
     if (!docDir) return sourceUri;
 
-    // Read the source as base64 (works with content:// URIs on Android)
+    // Read the source as base64
     const base64 = await FileSystem.readAsStringAsync(sourceUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    // Write to app's document directory as a new file
+    // Write to app's document directory
     const fileName = `photo_${Date.now()}.jpg`;
     const destUri = `${docDir}${fileName}`;
     await FileSystem.writeAsStringAsync(destUri, base64, {
@@ -323,101 +321,38 @@ export function PhotoPicker({ photo, onPhotoChange }: {
   const [showOptions, setShowOptions] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const pickFromGallery = useCallback(async () => {
+  // Use DocumentPicker to select images - this works reliably on all Android devices
+  // without requiring the ExponentImagePicker native module
+  const pickFromDevice = useCallback(async () => {
     setShowOptions(false);
     setLoading(true);
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Please allow access to your photo library in Settings.");
-        setLoading(false);
-        return;
-      }
-
-      // Use base64:true so we always get data even if URI is content://
-      const result = await ImagePicker.launchImageLibraryAsync({
-        quality: 0.6,
-        base64: true,
-        exif: false,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*"],
+        copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        if (asset.base64) {
-          // Save base64 directly to file system using static import
-          try {
-            const docDir = FileSystem.documentDirectory;
-            if (docDir) {
-              const fileName = `photo_${Date.now()}.jpg`;
-              const destUri = `${docDir}${fileName}`;
-              await FileSystem.writeAsStringAsync(destUri, asset.base64, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-              onPhotoChange(destUri);
-            } else {
-              onPhotoChange(asset.uri);
-            }
-          } catch {
-            onPhotoChange(asset.uri);
-          }
+        const uri = asset.uri;
+
+        if (Platform.OS === "web") {
+          // On web, use the URI directly
+          onPhotoChange(uri);
         } else {
-          // No base64, try to persist the URI
-          const persisted = await persistPhoto(asset.uri);
-          onPhotoChange(persisted);
+          // On native, persist to app storage
+          try {
+            const persisted = await persistPhotoFromUri(uri);
+            onPhotoChange(persisted);
+          } catch {
+            // Fallback: use the cache URI directly
+            onPhotoChange(uri);
+          }
         }
       }
     } catch (e: any) {
-      console.error("Gallery picker error:", e);
-      Alert.alert("Error", `Failed to pick image: ${e?.message || "Unknown error"}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [onPhotoChange]);
-
-  const takePhoto = useCallback(async () => {
-    setShowOptions(false);
-    setLoading(true);
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Camera permission is needed. Please enable it in Settings.");
-        setLoading(false);
-        return;
-      }
-
-      // Use base64:true for reliable data capture
-      const result = await ImagePicker.launchCameraAsync({
-        quality: 0.6,
-        base64: true,
-        exif: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        if (asset.base64) {
-          try {
-            const docDir = FileSystem.documentDirectory;
-            if (docDir) {
-              const fileName = `photo_${Date.now()}.jpg`;
-              const destUri = `${docDir}${fileName}`;
-              await FileSystem.writeAsStringAsync(destUri, asset.base64, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-              onPhotoChange(destUri);
-            } else {
-              onPhotoChange(asset.uri);
-            }
-          } catch {
-            onPhotoChange(asset.uri);
-          }
-        } else {
-          const persisted = await persistPhoto(asset.uri);
-          onPhotoChange(persisted);
-        }
-      }
-    } catch (e: any) {
-      console.error("Camera error:", e);
-      Alert.alert("Error", `Failed to take photo: ${e?.message || "Unknown error"}`);
+      console.error("Photo picker error:", e);
+      Alert.alert("Error", `Failed to select photo: ${e?.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
@@ -490,26 +425,14 @@ export function PhotoPicker({ photo, onPhotoChange }: {
               </View>
               <Text className="text-base font-semibold text-foreground px-5 mb-3">Choose Photo</Text>
 
-              <Pressable onPress={takePhoto} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+              <Pressable onPress={pickFromDevice} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                 <View className="flex-row items-center px-5 py-3.5 gap-3">
                   <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: colors.primary + "15" }}>
-                    <IconSymbol name="camera.fill" size={20} color={colors.primary} />
+                    <IconSymbol name="photo.fill" size={20} color={colors.primary} />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-sm font-medium text-foreground">Take Photo</Text>
-                    <Text className="text-xs text-muted">Use camera to capture a new photo</Text>
-                  </View>
-                </View>
-              </Pressable>
-
-              <Pressable onPress={pickFromGallery} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-                <View className="flex-row items-center px-5 py-3.5 gap-3">
-                  <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: "#4285F4" + "15" }}>
-                    <IconSymbol name="photo.fill" size={20} color="#4285F4" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-medium text-foreground">Choose from Gallery</Text>
-                    <Text className="text-xs text-muted">Select an existing photo from your device</Text>
+                    <Text className="text-sm font-medium text-foreground">Choose from Device</Text>
+                    <Text className="text-xs text-muted">Select a photo from gallery, camera, or files</Text>
                   </View>
                 </View>
               </Pressable>

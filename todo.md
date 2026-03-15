@@ -41,3 +41,18 @@
 - [x] Bug: Google Drive send error - Fixed: proper error handling and imports
 - [x] Bug: JSON export error - Fixed: proper FileSystem imports and null checks
 - [x] Bug: Photo upload STILL failing - ROOT CAUSE: dynamic require() fails at runtime; fixed with static import from expo-file-system/legacy + base64 persistence
+- [ ] Bug: Photo picker crash - ExponentImagePicker native module incompatible with Expo Go; replace with document-picker
+- [ ] Bug: Google Drive import not working
+
+
+## Major Redesign (Phase 2)
+
+- [x] Fix: Photo upload - added Android permissions (READ_MEDIA_IMAGES, CAMERA, etc.)
+- [x] Feature: CSV export with folder structure (photos, data, relationships)
+- [ ] Feature: Persistent bottom tab bar visible in all sections
+- [ ] Feature: Family summary profile with tabs (Spouse, Parents, Grandchild, Great-grandchild)
+- [ ] Feature: Hierarchical card-based tree view (like reference APK)
+- [ ] Feature: Tree view with visible photos and connection lines
+- [ ] Feature: Zoomable/scrollable tree canvas
+- [ ] Feature: Google Drive auto-sync like Fuelio app
+- [ ] Feature: Add Father/Mother buttons on tree nodes

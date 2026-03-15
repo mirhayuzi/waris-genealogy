@@ -7,6 +7,12 @@ type Language = "en" | "bm";
 
 const translations = {
   en: {
+    // Navigation
+    "nav.home": "Home",
+    "nav.tree": "Tree",
+    "nav.tools": "Tools",
+    "nav.settings": "Settings",
+
     // Common
     save: "Save",
     cancel: "Cancel",
@@ -175,6 +181,12 @@ const translations = {
     never: "Never",
   },
   bm: {
+    // Navigation
+    "nav.home": "Rumah",
+    "nav.tree": "Pohon",
+    "nav.tools": "Alat",
+    "nav.settings": "Tetapan",
+
     // Common
     save: "Simpan",
     cancel: "Batal",

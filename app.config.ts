@@ -50,9 +50,12 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
-    "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSPhotoLibraryUsageDescription: "Allow Waris Genealogy to access your photos to add family member pictures",
+      NSCameraUsageDescription: "Allow Waris Genealogy to access your camera to take family photos",
+      NSPhotoLibraryAddUsageDescription: "Allow Waris Genealogy to save photos to your library",
+    },
   },
   android: {
     adaptiveIcon: {
@@ -64,7 +67,13 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: [
+      "POST_NOTIFICATIONS",
+      "READ_MEDIA_IMAGES",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE",
+      "CAMERA",
+    ],
     intentFilters: [
       {
         action: "VIEW",
@@ -93,6 +102,12 @@ const config: ExpoConfig = {
       },
     ],
     [
+      "expo-document-picker",
+      {
+        iCloudContainerEnvironment: "Production",
+      },
+    ],
+    [
       "expo-video",
       {
         supportsBackgroundPlayback: true,
@@ -117,6 +132,8 @@ const config: ExpoConfig = {
         android: {
           buildArchs: ["armeabi-v7a", "arm64-v8a"],
           minSdkVersion: 24,
+          compileSdkVersion: 34,
+          targetSdkVersion: 34,
         },
       },
     ],
