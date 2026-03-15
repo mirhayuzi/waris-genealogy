@@ -188,7 +188,7 @@ export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string,
   clientId: string,
-  codeVerifier?: string,
+  clientSecret?: string,
 ): Promise<{ tokens: AuthTokens; user: GoogleUser } | null> {
   try {
     const body: Record<string, string> = {
@@ -197,8 +197,8 @@ export async function exchangeCodeForTokens(
       redirect_uri: redirectUri,
       client_id: clientId,
     };
-    if (codeVerifier) {
-      body.code_verifier = codeVerifier;
+    if (clientSecret) {
+      body.client_secret = clientSecret;
     }
 
     const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
@@ -253,6 +253,30 @@ async function fetchUserInfo(accessToken: string): Promise<GoogleUser | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Store tokens received from server-side OAuth exchange and fetch user info.
+ * The server already exchanged the auth code for tokens.
+ */
+export async function storeServerTokens(params: {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+}): Promise<GoogleUser | null> {
+  const tokens: AuthTokens = {
+    accessToken: params.accessToken,
+    refreshToken: params.refreshToken,
+    expiresAt: Date.now() + params.expiresIn * 1000,
+  };
+  await storeTokens(tokens);
+
+  // Fetch and store user info
+  const user = await fetchUserInfo(tokens.accessToken);
+  if (user) {
+    await storeUser(user);
+  }
+  return user;
 }
 
 /**

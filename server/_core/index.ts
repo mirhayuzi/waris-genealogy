@@ -62,28 +62,66 @@ async function startServer() {
 
   // Google OAuth callback proxy
   // The app redirects Google OAuth to this HTTPS endpoint.
-  // After Google sends the auth code here, we redirect to the app's custom scheme.
-  app.get("/api/google/callback", (req, res) => {
-    const { code, error, state } = req.query;
+  // The server exchanges the auth code for tokens (using client_secret),
+  // then redirects to the app's custom scheme with the tokens.
+  app.get("/api/google/callback", async (req, res) => {
+    const { code, error } = req.query;
     const appScheme = "manus20260312144942";
 
     if (error) {
-      // Redirect error back to app
       res.redirect(`${appScheme}://google-callback?error=${encodeURIComponent(String(error))}`);
       return;
     }
 
-    if (code) {
-      // Redirect auth code back to app via custom scheme
-      let redirectUrl = `${appScheme}://google-callback?code=${encodeURIComponent(String(code))}`;
-      if (state) {
-        redirectUrl += `&state=${encodeURIComponent(String(state))}`;
-      }
-      res.redirect(redirectUrl);
+    if (!code) {
+      res.status(400).send("Missing code or error parameter");
       return;
     }
 
-    res.status(400).send("Missing code or error parameter");
+    try {
+      // Exchange code for tokens on the server side (has client_secret)
+      const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || "";
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+      // The redirect_uri must match what was sent in the initial auth request
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+      const host = req.headers["x-forwarded-host"] || req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/google/callback`;
+
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code: String(code),
+          redirect_uri: redirectUri,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }).toString(),
+      });
+
+      if (!tokenResponse.ok) {
+        const errText = await tokenResponse.text();
+        console.error("Google token exchange failed:", errText);
+        res.redirect(`${appScheme}://google-callback?error=${encodeURIComponent("token_exchange_failed")}`);
+        return;
+      }
+
+      const tokenData = await tokenResponse.json();
+
+      // Redirect tokens to app via custom scheme
+      const params = new URLSearchParams({
+        access_token: tokenData.access_token,
+        expires_in: String(tokenData.expires_in || 3600),
+      });
+      if (tokenData.refresh_token) {
+        params.set("refresh_token", tokenData.refresh_token);
+      }
+
+      res.redirect(`${appScheme}://google-callback?${params.toString()}`);
+    } catch (e) {
+      console.error("Google OAuth callback error:", e);
+      res.redirect(`${appScheme}://google-callback?error=${encodeURIComponent("server_error")}`);
+    }
   });
 
   app.use(

@@ -48,6 +48,9 @@ const MAPPING = {
   "minus.circle.fill": "remove-circle",
   "shield.fill": "shield",
   "group.fill": "groups",
+  "person.3.fill": "groups",
+  "doc.on.doc.fill": "file-copy",
+  "square.and.arrow.down": "save",
 } as unknown as IconMapping;
 
 export function IconSymbol({

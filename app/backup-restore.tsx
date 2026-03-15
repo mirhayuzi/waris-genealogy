@@ -17,7 +17,7 @@ import {
   signOut as googleSignOut,
   syncAllToDrive,
   downloadAllFromDrive,
-  exchangeCodeForTokens,
+  storeServerTokens,
 } from "@/lib/google-drive";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Linking from "expo-linking";
@@ -131,9 +131,11 @@ export default function BackupRestoreScreen() {
         // Remove listener
         linkSubscription.remove();
 
-        // Parse the code from the URL
+        // Parse tokens from the URL (server already exchanged the code)
         const urlObj = new URL(url);
-        const code = urlObj.searchParams.get("code");
+        const accessToken = urlObj.searchParams.get("access_token");
+        const refreshToken = urlObj.searchParams.get("refresh_token");
+        const expiresIn = urlObj.searchParams.get("expires_in");
         const error = urlObj.searchParams.get("error");
 
         if (error) {
@@ -145,26 +147,26 @@ export default function BackupRestoreScreen() {
           return;
         }
 
-        if (code) {
-          // Exchange code for tokens using the server redirect URI
-          const tokenResult = await exchangeCodeForTokens(
-            code,
-            serverRedirectUri,
-            clientId,
-          );
+        if (accessToken) {
+          // Server already exchanged the code for tokens — just store them
+          const user = await storeServerTokens({
+            accessToken,
+            refreshToken: refreshToken || undefined,
+            expiresIn: parseInt(expiresIn || "3600", 10),
+          });
 
-          if (tokenResult) {
-            setGoogleUser(tokenResult.user);
+          if (user) {
+            setGoogleUser(user);
             Alert.alert(
               lang === "bm" ? "Berjaya!" : "Success!",
               lang === "bm"
-                ? `Log masuk sebagai ${tokenResult.user.name}`
-                : `Signed in as ${tokenResult.user.name}`,
+                ? `Log masuk sebagai ${user.name}`
+                : `Signed in as ${user.name}`,
             );
           } else {
             Alert.alert(
               lang === "bm" ? "Ralat" : "Error",
-              lang === "bm" ? "Gagal mendapatkan token akses." : "Failed to get access token.",
+              lang === "bm" ? "Gagal mendapatkan maklumat pengguna." : "Failed to get user info.",
             );
           }
         }
@@ -364,6 +366,7 @@ export default function BackupRestoreScreen() {
     setExporting(true);
     try {
       if (Platform.OS === "web") {
+        // Web: download via browser
         const membersCSV = buildMembersCSVString();
         const blob = new Blob([membersCSV], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
@@ -373,14 +376,81 @@ export default function BackupRestoreScreen() {
         a.click();
         URL.revokeObjectURL(url);
         Alert.alert(lang === "bm" ? "Berjaya" : "Success", lang === "bm" ? "Fail CSV dimuat turun." : "CSV file downloaded.");
+      } else if (FileSystem) {
+        // Native: Use SAF to let user choose save location first
+        const { StorageAccessFramework } = FileSystem;
+
+        // Step 1: Ask user to pick a folder
+        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (!permissions.granted) {
+          // User cancelled the folder picker
+          setExporting(false);
+          return;
+        }
+
+        const dirUri = permissions.directoryUri;
+
+        // Step 2: Generate CSV content
+        const membersCSV = buildMembersCSVString();
+        const marriagesCSV = buildMarriagesCSVString();
+        const parentChildCSV = buildParentChildCSVString();
+
+        // Step 3: Create and write each CSV file in the chosen directory
+        const dateStr = new Date().toISOString().split("T")[0];
+        let filesCreated = 0;
+
+        // Members CSV
+        const membersUri = await StorageAccessFramework.createFileAsync(
+          dirUri,
+          `waris-members-${dateStr}`,
+          "text/csv",
+        );
+        await FileSystem.writeAsStringAsync(membersUri, membersCSV, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        filesCreated++;
+
+        // Marriages CSV
+        if (data.marriages.length > 0) {
+          const marriagesUri = await StorageAccessFramework.createFileAsync(
+            dirUri,
+            `waris-marriages-${dateStr}`,
+            "text/csv",
+          );
+          await FileSystem.writeAsStringAsync(marriagesUri, marriagesCSV, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          filesCreated++;
+        }
+
+        // Parent-Child CSV
+        if (data.parentChildren.length > 0) {
+          const parentChildUri = await StorageAccessFramework.createFileAsync(
+            dirUri,
+            `waris-parent-child-${dateStr}`,
+            "text/csv",
+          );
+          await FileSystem.writeAsStringAsync(parentChildUri, parentChildCSV, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          filesCreated++;
+        }
+
+        Alert.alert(
+          lang === "bm" ? "Berjaya!" : "Success!",
+          lang === "bm"
+            ? `${filesCreated} fail CSV berjaya disimpan ke lokasi yang dipilih.`
+            : `${filesCreated} CSV file(s) saved to the selected location.`,
+        );
       } else {
+        // Fallback: save to app storage
         const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
         if (result.success) {
           Alert.alert(
             lang === "bm" ? "Berjaya" : "Success",
             lang === "bm"
-              ? "Fail CSV disimpan dalam storan aplikasi. Gunakan 'Hantar ke Google Drive' untuk sandaran awan."
-              : "CSV files saved to app storage. Use 'Send to Google Drive' for cloud backup."
+              ? "Fail CSV disimpan dalam storan aplikasi."
+              : "CSV files saved to app storage.",
           );
         }
       }
