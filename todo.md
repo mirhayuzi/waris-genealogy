@@ -58,3 +58,6 @@
 - [ ] Feature: Google Drive auto-sync like Fuelio app
 - [x] Feature: Add child buttons on tree nodes
 - [x] Bug: APK build fails - compileSdk android-34 too low, updated to compileSdk 36 / targetSdk 35
+- [x] Feature: Change backup save format from JSON to CSV (Fuelio-style)
+- [x] Feature: CSV restore/import functionality
+- [x] Feature: Fuelio-style backup-restore UI with CSV files
