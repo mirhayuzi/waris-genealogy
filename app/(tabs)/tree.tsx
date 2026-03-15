@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Dimensions, TextInput } from "react-native";
+import { Text, View, Pressable, ScrollView, Dimensions, TextInput, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -52,108 +52,185 @@ function useTreeData() {
   }, [data]);
 }
 
-function PersonAvatar({ person, size, colors }: {
+// Card-based person node with photo, name, and status
+function PersonCard({ person, isRoot, onPress, onAddChild, colors, scale }: {
   person: Person;
-  size: number;
+  isRoot?: boolean;
+  onPress: () => void;
+  onAddChild?: () => void;
   colors: ReturnType<typeof useColors>;
+  scale: number;
 }) {
+  const cardW = Math.max(80, Math.round(120 * scale));
+  const avatarSize = Math.max(28, Math.round(48 * scale));
+  const fontSize = Math.max(9, Math.round(12 * scale));
+  const subFontSize = Math.max(7, Math.round(10 * scale));
+  const padding = Math.max(6, Math.round(10 * scale));
   const borderColor = person.isAlive ? colors.primary : colors.muted;
-
-  if (person.photo) {
-    return (
-      <Image
-        source={{ uri: person.photo }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="cover"
-      />
-    );
-  }
+  const genderColor = person.gender === "male" ? "#4A90D9" : "#E87CA0";
 
   return (
-    <View
-      className="items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: borderColor + "20",
-      }}
-    >
-      <Text className="font-bold" style={{ color: borderColor, fontSize: size * 0.4 }}>
-        {person.firstName.charAt(0).toUpperCase()}
-      </Text>
+    <View className="items-center">
+      <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
+        <View
+          style={[
+            styles.card,
+            {
+              width: cardW,
+              padding,
+              borderColor: genderColor,
+              backgroundColor: colors.surface,
+              borderWidth: isRoot ? 2.5 : 1.5,
+              shadowColor: genderColor,
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 3,
+            },
+          ]}
+        >
+          {/* Photo / Avatar */}
+          {person.photo ? (
+            <Image
+              source={{ uri: person.photo }}
+              style={{
+                width: avatarSize,
+                height: avatarSize,
+                borderRadius: avatarSize / 2,
+                borderWidth: 2,
+                borderColor: genderColor,
+              }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              style={{
+                width: avatarSize,
+                height: avatarSize,
+                borderRadius: avatarSize / 2,
+                backgroundColor: genderColor + "20",
+                borderWidth: 2,
+                borderColor: genderColor,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: genderColor, fontWeight: "700", fontSize: avatarSize * 0.4 }}>
+                {person.firstName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+
+          {/* Name */}
+          <Text
+            style={{ fontSize, fontWeight: "600", color: colors.foreground, textAlign: "center", marginTop: 4 }}
+            numberOfLines={2}
+          >
+            {person.prefix ? `${person.prefix} ` : ""}{person.firstName}
+          </Text>
+
+          {/* Bin/Binti */}
+          {person.binBinti && (
+            <Text
+              style={{ fontSize: subFontSize, color: colors.muted, textAlign: "center" }}
+              numberOfLines={1}
+            >
+              {person.gender === "male" ? "bin" : "binti"} {person.binBinti}
+            </Text>
+          )}
+
+          {/* Status indicator */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 3 }}>
+            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: person.isAlive ? colors.success : colors.muted }} />
+            <Text style={{ fontSize: Math.max(7, Math.round(8 * scale)), color: colors.muted }}>
+              {person.isAlive ? "Living" : "Deceased"}
+            </Text>
+          </View>
+
+          {/* Root badge */}
+          {isRoot && (
+            <View style={{ backgroundColor: colors.primary + "20", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 }}>
+              <Text style={{ color: colors.primary, fontSize: Math.max(7, Math.round(8 * scale)), fontWeight: "700" }}>ROOT</Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+
+      {/* +Add button below card */}
+      {onAddChild && scale >= 0.5 && (
+        <Pressable onPress={onAddChild} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginTop: 4 }]}>
+          <View style={{
+            width: Math.max(18, Math.round(24 * scale)),
+            height: Math.max(18, Math.round(24 * scale)),
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}>
+            <Text style={{ color: "#fff", fontSize: Math.max(12, Math.round(16 * scale)), fontWeight: "700", lineHeight: Math.max(14, Math.round(18 * scale)) }}>+</Text>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
 
-function PersonNode({ person, isRoot, onPress, colors, scale }: {
-  person: Person;
-  isRoot?: boolean;
-  onPress: () => void;
-  colors: ReturnType<typeof useColors>;
-  scale: number;
-}) {
-  const borderColor = person.isAlive ? colors.primary : colors.muted;
-  const avatarSize = Math.max(24, Math.round(48 * scale));
-  const fontSize = Math.max(8, Math.round(12 * scale));
-  const subFontSize = Math.max(7, Math.round(10 * scale));
-  const padding = Math.max(4, Math.round(12 * scale));
-  const minW = Math.max(60, Math.round(100 * scale));
-
+// Horizontal marriage connector
+function MarriageConnector({ scale, colors }: { scale: number; colors: ReturnType<typeof useColors> }) {
+  const lineW = Math.max(12, Math.round(28 * scale));
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-      <View
-        className="items-center rounded-2xl bg-surface border-2"
-        style={{ borderColor, padding, minWidth: minW }}
-      >
-        <PersonAvatar person={person} size={avatarSize} colors={colors} />
-        <Text
-          className="font-semibold text-foreground text-center"
-          style={{ fontSize, marginTop: 2 }}
-          numberOfLines={2}
-        >
-          {person.prefix ? `${person.prefix} ` : ""}{person.firstName}
-        </Text>
-        {person.binBinti && (
-          <Text className="text-muted text-center" style={{ fontSize: subFontSize }} numberOfLines={1}>
-            {person.gender === "male" ? "bin" : "binti"} {person.binBinti}
-          </Text>
-        )}
-        {isRoot && (
-          <View className="bg-primary/20 rounded-full px-2 py-0.5 mt-1">
-            <Text className="font-medium" style={{ color: colors.primary, fontSize: Math.max(7, Math.round(9 * scale)) }}>ROOT</Text>
-          </View>
-        )}
-      </View>
-    </Pressable>
+    <View style={{ alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: lineW, height: 2, backgroundColor: colors.accent }} />
+      <View style={{
+        position: "absolute",
+        width: Math.max(8, Math.round(12 * scale)),
+        height: Math.max(8, Math.round(12 * scale)),
+        borderRadius: 6,
+        backgroundColor: colors.accent,
+      }} />
+    </View>
   );
 }
 
-function TreeLevel({ node, router, colors, rootId, scale }: {
+// Vertical line connector
+function VerticalLine({ height, colors }: { height: number; colors: ReturnType<typeof useColors> }) {
+  return <View style={{ width: 2, height, backgroundColor: colors.border, alignSelf: "center" }} />;
+}
+
+// Horizontal bracket for multiple children
+function HorizontalBracket({ width, colors }: { width: number; colors: ReturnType<typeof useColors> }) {
+  return <View style={{ width, height: 2, backgroundColor: colors.border, alignSelf: "center" }} />;
+}
+
+// Recursive tree node renderer
+function TreeNodeView({ node, router, colors, rootId, scale, onAddChild }: {
   node: TreeNode;
   router: ReturnType<typeof useRouter>;
   colors: ReturnType<typeof useColors>;
   rootId?: string;
   scale: number;
+  onAddChild: (parentId: string) => void;
 }) {
-  const gap = Math.max(4, Math.round(8 * scale));
-  const lineH = Math.max(8, Math.round(24 * scale));
-  const lineW = Math.max(8, Math.round(24 * scale));
+  const gap = Math.max(6, Math.round(12 * scale));
+  const verticalGap = Math.max(10, Math.round(20 * scale));
+  const hasChildren = node.children.length > 0;
 
   return (
-    <View className="items-center">
-      <View className="flex-row items-center" style={{ gap }}>
-        <PersonNode
+    <View style={{ alignItems: "center" }}>
+      {/* Parent row: person + spouses */}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: gap }}>
+        <PersonCard
           person={node.person}
           isRoot={node.person.id === rootId}
           onPress={() => router.push({ pathname: "/member-profile" as any, params: { id: node.person.id } })}
+          onAddChild={() => onAddChild(node.person.id)}
           colors={colors}
           scale={scale}
         />
         {node.spouses.map((spouse) => (
-          <View key={spouse.id} className="flex-row items-center" style={{ gap }}>
-            <View style={{ width: lineW, height: 2, backgroundColor: colors.accent }} />
-            <PersonNode
+          <View key={spouse.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: gap }}>
+            <MarriageConnector scale={scale} colors={colors} />
+            <PersonCard
               person={spouse}
               onPress={() => router.push({ pathname: "/member-profile" as any, params: { id: spouse.id } })}
               colors={colors}
@@ -163,20 +240,36 @@ function TreeLevel({ node, router, colors, rootId, scale }: {
         ))}
       </View>
 
-      {node.children.length > 0 && (
-        <View style={{ width: 2, height: lineH, backgroundColor: colors.border }} />
-      )}
+      {/* Vertical connector to children */}
+      {hasChildren && <VerticalLine height={verticalGap} colors={colors} />}
 
-      {node.children.length > 0 && (
-        <View className="flex-row items-start" style={{ gap: Math.max(8, Math.round(16 * scale)) }}>
-          {node.children.map((child) => (
-            <View key={child.person.id} className="items-center">
-              {node.children.length > 1 && (
-                <View style={{ width: 2, height: Math.max(4, Math.round(12 * scale)), backgroundColor: colors.border }} />
-              )}
-              <TreeLevel node={child} router={router} colors={colors} rootId={rootId} scale={scale} />
+      {/* Children row */}
+      {hasChildren && (
+        <View style={{ alignItems: "center" }}>
+          {/* Horizontal bracket if multiple children */}
+          {node.children.length > 1 && (
+            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              {node.children.map((child, idx) => (
+                <View key={child.person.id} style={{ alignItems: "center", flex: 1 }}>
+                  <View style={{ width: 2, height: 8, backgroundColor: colors.border }} />
+                </View>
+              ))}
             </View>
-          ))}
+          )}
+
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: Math.max(12, Math.round(24 * scale)) }}>
+            {node.children.map((child) => (
+              <TreeNodeView
+                key={child.person.id}
+                node={child}
+                router={router}
+                colors={colors}
+                rootId={rootId}
+                scale={scale}
+                onAddChild={onAddChild}
+              />
+            ))}
+          </View>
         </View>
       )}
     </View>
@@ -188,17 +281,21 @@ export default function TreeScreen() {
   const colors = useColors();
   const { data } = useFamily();
   const treeData = useTreeData();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
-  const [zoom, setZoom] = useState(1.0);
+  const [zoom, setZoom] = useState(0.85);
 
   const MIN_ZOOM = 0.3;
   const MAX_ZOOM = 2.0;
-  const ZOOM_STEP = 0.2;
+  const ZOOM_STEP = 0.15;
 
-  const handleZoomIn = () => setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
-  const handleZoomOut = () => setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP));
-  const handleResetZoom = () => setZoom(1.0);
+  const handleZoomIn = () => setZoom((z) => Math.min(MAX_ZOOM, +(z + ZOOM_STEP).toFixed(2)));
+  const handleZoomOut = () => setZoom((z) => Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2)));
+  const handleResetZoom = () => setZoom(0.85);
+
+  const handleAddChild = (parentId: string) => {
+    router.push({ pathname: "/add-member" as any, params: { parentId } });
+  };
 
   const filteredPersons = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -218,14 +315,24 @@ export default function TreeScreen() {
           <Text className="text-2xl font-bold text-foreground">{t("familyTree")}</Text>
           <Text className="text-sm text-muted">{data.persons.length} {t("members")}</Text>
         </View>
-        <Pressable
-          onPress={() => router.push("/add-member" as any)}
-          style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-        >
-          <View className="w-10 h-10 rounded-full bg-primary items-center justify-center">
-            <IconSymbol name="plus.circle.fill" size={22} color="#fff" />
-          </View>
-        </Pressable>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => router.push("/miller-columns" as any)}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <View className="w-10 h-10 rounded-full bg-surface border border-border items-center justify-center">
+              <IconSymbol name="list.bullet" size={20} color={colors.foreground} />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/add-member" as any)}
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+          >
+            <View className="w-10 h-10 rounded-full bg-primary items-center justify-center">
+              <IconSymbol name="plus" size={22} color="#fff" />
+            </View>
+          </Pressable>
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -264,13 +371,23 @@ export default function TreeScreen() {
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
               <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
-                <PersonAvatar person={person} size={40} colors={colors} />
+                {person.photo ? (
+                  <Image source={{ uri: person.photo }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+                ) : (
+                  <View
+                    className="w-10 h-10 rounded-full items-center justify-center"
+                    style={{ backgroundColor: (person.isAlive ? colors.primary : colors.muted) + "20" }}
+                  >
+                    <Text className="text-sm font-bold" style={{ color: person.isAlive ? colors.primary : colors.muted }}>
+                      {person.firstName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
                   <Text className="text-xs text-muted">
                     {person.isAlive ? t("living") : t("deceased")}
                     {person.race ? ` · ${person.race}` : ""}
-                    {person.religion ? ` · ${person.religion}` : ""}
                   </Text>
                 </View>
                 <IconSymbol name="chevron.right" size={16} color={colors.muted} />
@@ -289,7 +406,7 @@ export default function TreeScreen() {
           <View className="flex-row items-center justify-center gap-2 px-5 mb-2">
             <Pressable onPress={handleZoomOut} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
               <View className="w-9 h-9 rounded-full bg-surface border border-border items-center justify-center">
-                <IconSymbol name="minus.circle.fill" size={18} color={colors.primary} />
+                <IconSymbol name="minus" size={18} color={colors.primary} />
               </View>
             </Pressable>
             <Pressable onPress={handleResetZoom} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
@@ -301,22 +418,29 @@ export default function TreeScreen() {
             </Pressable>
             <Pressable onPress={handleZoomIn} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
               <View className="w-9 h-9 rounded-full bg-surface border border-border items-center justify-center">
-                <IconSymbol name="plus.circle.fill" size={18} color={colors.primary} />
+                <IconSymbol name="plus" size={18} color={colors.primary} />
               </View>
             </Pressable>
           </View>
 
-          {/* Tree View */}
+          {/* Tree View - Scrollable Canvas */}
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={false}
+            showsHorizontalScrollIndicator={true}
             contentContainerStyle={{ padding: 20, minWidth: Dimensions.get("window").width }}
           >
             <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ alignItems: "center", paddingBottom: 40 }}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ alignItems: "center", paddingBottom: 60 }}
             >
-              <TreeLevel node={treeData} router={router} colors={colors} rootId={data.rootPersonId} scale={zoom} />
+              <TreeNodeView
+                node={treeData}
+                router={router}
+                colors={colors}
+                rootId={data.rootPersonId}
+                scale={zoom}
+                onAddChild={handleAddChild}
+              />
             </ScrollView>
           </ScrollView>
         </View>
@@ -342,3 +466,10 @@ export default function TreeScreen() {
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    alignItems: "center",
+    borderRadius: 16,
+  },
+});

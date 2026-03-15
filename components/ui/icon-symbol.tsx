@@ -45,7 +45,10 @@ const MAPPING = {
   "square.grid.2x2.fill": "grid-view",
   "folder.fill": "folder",
   "arrow.down.circle.fill": "download",
-} as IconMapping;
+  "minus.circle.fill": "remove-circle",
+  "shield.fill": "shield",
+  "group.fill": "groups",
+} as unknown as IconMapping;
 
 export function IconSymbol({
   name,

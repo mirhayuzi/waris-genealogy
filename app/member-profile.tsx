@@ -1,12 +1,15 @@
-import { Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert, FlatList } from "react-native";
 import { Image } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
-import { getDisplayName } from "@/lib/types";
+import { getDisplayName, Person } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
+import { useState, useMemo } from "react";
+
+type TabKey = "details" | "spouse" | "parents" | "children" | "grandchildren" | "great-grandchildren" | "siblings";
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -18,35 +21,36 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
   );
 }
 
-function RelationCard({ label, persons, onPress, colors }: {
-  label: string;
-  persons: { id: string; name: string; isAlive: boolean }[];
-  onPress: (id: string) => void;
+function PersonListItem({ person, onPress, colors }: {
+  person: Person;
+  onPress: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  if (persons.length === 0) return null;
   return (
-    <View className="mb-4">
-      <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{label}</Text>
-      <View className="gap-2">
-        {persons.map((p) => (
-          <Pressable key={p.id} onPress={() => onPress(p.id)} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-            <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3">
-              <View
-                className="w-9 h-9 rounded-full items-center justify-center"
-                style={{ backgroundColor: (p.isAlive ? colors.primary : colors.muted) + "20" }}
-              >
-                <Text className="text-sm font-bold" style={{ color: p.isAlive ? colors.primary : colors.muted }}>
-                  {p.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text className="flex-1 text-sm font-medium text-foreground">{p.name}</Text>
-              <IconSymbol name="chevron.right" size={14} color={colors.muted} />
-            </View>
-          </Pressable>
-        ))}
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+      <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
+        {person.photo ? (
+          <Image source={{ uri: person.photo }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+        ) : (
+          <View
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: (person.isAlive ? colors.primary : colors.muted) + "20" }}
+          >
+            <Text className="text-sm font-bold" style={{ color: person.isAlive ? colors.primary : colors.muted }}>
+              {person.firstName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <View className="flex-1">
+          <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
+          <Text className="text-xs text-muted">
+            {person.isAlive ? "Living" : "Deceased"}
+            {person.birthDate ? ` · b. ${person.birthDate}` : ""}
+          </Text>
+        </View>
+        <IconSymbol name="chevron.right" size={14} color={colors.muted} />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -55,7 +59,8 @@ export default function MemberProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const { getPersonById, getParents, getChildren, getSpouses, getSiblings, deletePerson, data, setRootPerson } = useFamily();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const [activeTab, setActiveTab] = useState<TabKey>("details");
 
   const person = getPersonById(id || "");
   if (!person) {
@@ -69,23 +74,123 @@ export default function MemberProfileScreen() {
     );
   }
 
-  const parents = getParents(person.id).map((p) => ({ id: p.id, name: getDisplayName(p), isAlive: p.isAlive }));
-  const children = getChildren(person.id).map((p) => ({ id: p.id, name: getDisplayName(p), isAlive: p.isAlive }));
-  const spouses = getSpouses(person.id).map((p) => ({ id: p.id, name: getDisplayName(p), isAlive: p.isAlive }));
-  const siblings = getSiblings(person.id).map((p) => ({ id: p.id, name: getDisplayName(p), isAlive: p.isAlive }));
+  const parents = getParents(person.id);
+  const children = getChildren(person.id);
+  const spouses = getSpouses(person.id);
+  const siblings = getSiblings(person.id);
+
+  // Compute grandchildren: children of children
+  const grandchildren = useMemo(() => {
+    const result: Person[] = [];
+    const seen = new Set<string>();
+    for (const child of children) {
+      for (const gc of getChildren(child.id)) {
+        if (!seen.has(gc.id)) {
+          seen.add(gc.id);
+          result.push(gc);
+        }
+      }
+    }
+    return result;
+  }, [children, getChildren]);
+
+  // Compute great-grandchildren: children of grandchildren
+  const greatGrandchildren = useMemo(() => {
+    const result: Person[] = [];
+    const seen = new Set<string>();
+    for (const gc of grandchildren) {
+      for (const ggc of getChildren(gc.id)) {
+        if (!seen.has(ggc.id)) {
+          seen.add(ggc.id);
+          result.push(ggc);
+        }
+      }
+    }
+    return result;
+  }, [grandchildren, getChildren]);
 
   const navigateToPerson = (personId: string) => {
     router.push({ pathname: "/member-profile" as any, params: { id: personId } });
   };
 
   const handleDelete = () => {
-    Alert.alert("Delete Member", `Are you sure you want to remove ${getDisplayName(person)} from the family tree?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => { deletePerson(person.id); router.back(); } },
-    ]);
+    Alert.alert(
+      lang === "bm" ? "Padam Ahli" : "Delete Member",
+      lang === "bm"
+        ? `Adakah anda pasti mahu membuang ${getDisplayName(person)} dari salasilah keluarga?`
+        : `Are you sure you want to remove ${getDisplayName(person)} from the family tree?`,
+      [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("delete"), style: "destructive", onPress: () => { deletePerson(person.id); router.back(); } },
+      ]
+    );
   };
 
   const isRoot = data.rootPersonId === person.id;
+
+  // Tab definitions with counts
+  const tabs: { key: TabKey; label: string; count?: number }[] = [
+    { key: "details", label: lang === "bm" ? "Maklumat" : "Details" },
+    { key: "spouse", label: lang === "bm" ? "Pasangan" : "Spouse", count: spouses.length },
+    { key: "parents", label: lang === "bm" ? "Ibu Bapa" : "Parents", count: parents.length },
+    { key: "children", label: lang === "bm" ? "Anak" : "Children", count: children.length },
+    { key: "grandchildren", label: lang === "bm" ? "Cucu" : "Grandchild", count: grandchildren.length },
+    { key: "great-grandchildren", label: lang === "bm" ? "Cicit" : "Great-grandchild", count: greatGrandchildren.length },
+    { key: "siblings", label: lang === "bm" ? "Adik-Beradik" : "Siblings", count: siblings.length },
+  ];
+
+  const getTabContent = () => {
+    switch (activeTab) {
+      case "details":
+        return (
+          <View className="bg-surface rounded-2xl px-4 border border-border">
+            <InfoRow label={lang === "bm" ? "Gelaran" : "Prefix"} value={person.prefix} />
+            <InfoRow label={lang === "bm" ? "Nama Pertama" : "First Name"} value={person.firstName} />
+            <InfoRow label={person.gender === "male" ? "Bin" : "Binti"} value={person.binBinti} />
+            <InfoRow label={lang === "bm" ? "Nama Akhir" : "Last Name"} value={person.lastName} />
+            <InfoRow label={lang === "bm" ? "Jantina" : "Gender"} value={person.gender === "male" ? (lang === "bm" ? "Lelaki" : "Male") : (lang === "bm" ? "Perempuan" : "Female")} />
+            <InfoRow label={lang === "bm" ? "Tarikh Lahir" : "Date of Birth"} value={person.birthDate} />
+            <InfoRow label={lang === "bm" ? "Tempat Lahir" : "Place of Birth"} value={person.birthPlace} />
+            {!person.isAlive && <InfoRow label={lang === "bm" ? "Tarikh Meninggal" : "Date of Death"} value={person.deathDate} />}
+            <InfoRow label={lang === "bm" ? "Etnik" : "Ethnicity"} value={person.race} />
+            <InfoRow label={lang === "bm" ? "Agama" : "Religion"} value={person.religion} />
+            {person.bio && <InfoRow label={lang === "bm" ? "Nota" : "Notes"} value={person.bio} />}
+          </View>
+        );
+      case "spouse":
+        return renderPersonList(spouses, lang === "bm" ? "Tiada pasangan direkodkan" : "No spouse recorded");
+      case "parents":
+        return renderPersonList(parents, lang === "bm" ? "Tiada ibu bapa direkodkan" : "No parents recorded");
+      case "children":
+        return renderPersonList(children, lang === "bm" ? "Tiada anak direkodkan" : "No children recorded");
+      case "grandchildren":
+        return renderPersonList(grandchildren, lang === "bm" ? "Tiada cucu direkodkan" : "No grandchildren recorded");
+      case "great-grandchildren":
+        return renderPersonList(greatGrandchildren, lang === "bm" ? "Tiada cicit direkodkan" : "No great-grandchildren recorded");
+      case "siblings":
+        return renderPersonList(siblings, lang === "bm" ? "Tiada adik-beradik direkodkan" : "No siblings recorded");
+      default:
+        return null;
+    }
+  };
+
+  const renderPersonList = (persons: Person[], emptyMsg: string) => {
+    if (persons.length === 0) {
+      return (
+        <View className="items-center py-8">
+          <IconSymbol name="person.fill" size={32} color={colors.muted} />
+          <Text className="text-sm text-muted mt-2">{emptyMsg}</Text>
+        </View>
+      );
+    }
+    return (
+      <View>
+        {persons.map((p) => (
+          <PersonListItem key={p.id} person={p} onPress={() => navigateToPerson(p.id)} colors={colors} />
+        ))}
+      </View>
+    );
+  };
 
   return (
     <ScreenContainer className="pt-2">
@@ -94,7 +199,7 @@ export default function MemberProfileScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="flex-row items-center gap-1">
             <IconSymbol name="chevron.left" size={20} color={colors.primary} />
-            <Text className="text-sm text-primary">Back</Text>
+            <Text className="text-sm" style={{ color: colors.primary }}>{t("back")}</Text>
           </View>
         </Pressable>
         <View className="flex-row gap-2">
@@ -116,7 +221,7 @@ export default function MemberProfileScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
         {/* Profile Header */}
-        <View className="items-center mb-6">
+        <View className="items-center mb-4">
           {person.photo ? (
             <View style={{ width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: person.isAlive ? colors.primary : colors.muted, overflow: "hidden", marginBottom: 12 }}>
               <Image source={{ uri: person.photo }} style={{ width: 90, height: 90, borderRadius: 45 }} contentFit="cover" />
@@ -141,17 +246,45 @@ export default function MemberProfileScreen() {
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: person.isAlive ? colors.success : colors.muted }}
             />
-            <Text className="text-sm text-muted">{person.isAlive ? "Living" : "Deceased"}</Text>
+            <Text className="text-sm text-muted">{person.isAlive ? (lang === "bm" ? "Hidup" : "Living") : (lang === "bm" ? "Meninggal" : "Deceased")}</Text>
             {isRoot && (
               <View className="bg-primary/15 rounded-full px-2 py-0.5">
                 <Text className="text-[10px] font-semibold" style={{ color: colors.primary }}>ROOT</Text>
               </View>
             )}
           </View>
+
+          {/* Family Summary Stats */}
+          <View className="flex-row items-center gap-4 mt-3">
+            {spouses.length > 0 && (
+              <View className="items-center">
+                <Text className="text-lg font-bold text-foreground">{spouses.length}</Text>
+                <Text className="text-[10px] text-muted">{lang === "bm" ? "Pasangan" : "Spouse"}</Text>
+              </View>
+            )}
+            {children.length > 0 && (
+              <View className="items-center">
+                <Text className="text-lg font-bold text-foreground">{children.length}</Text>
+                <Text className="text-[10px] text-muted">{lang === "bm" ? "Anak" : "Children"}</Text>
+              </View>
+            )}
+            {grandchildren.length > 0 && (
+              <View className="items-center">
+                <Text className="text-lg font-bold text-foreground">{grandchildren.length}</Text>
+                <Text className="text-[10px] text-muted">{lang === "bm" ? "Cucu" : "Grandchild"}</Text>
+              </View>
+            )}
+            {greatGrandchildren.length > 0 && (
+              <View className="items-center">
+                <Text className="text-lg font-bold text-foreground">{greatGrandchildren.length}</Text>
+                <Text className="text-[10px] text-muted">{lang === "bm" ? "Cicit" : "Great-GC"}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Quick Actions */}
-        <View className="flex-row gap-2 mb-4">
+        <View className="flex-row gap-2 mb-3">
           <Pressable
             onPress={() => router.push({ pathname: "/add-member" as any, params: { parentId: person.id } })}
             style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
@@ -178,7 +311,7 @@ export default function MemberProfileScreen() {
           </Pressable>
         </View>
 
-        {/* View as Root / Set Root */}
+        {/* View as Root */}
         {!isRoot && (
           <Pressable
             onPress={() => {
@@ -187,7 +320,7 @@ export default function MemberProfileScreen() {
             }}
             style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
           >
-            <View className="flex-row items-center justify-center gap-2 rounded-xl py-3 mb-6" style={{ backgroundColor: colors.accent + "15", borderWidth: 1, borderColor: colors.accent + "30" }}>
+            <View className="flex-row items-center justify-center gap-2 rounded-xl py-3 mb-4" style={{ backgroundColor: colors.accent + "15", borderWidth: 1, borderColor: colors.accent + "30" }}>
               <IconSymbol name="tree" size={16} color={colors.accent} />
               <Text className="text-sm font-semibold" style={{ color: colors.accent }}>{t("viewAsRoot")}</Text>
             </View>
@@ -195,27 +328,51 @@ export default function MemberProfileScreen() {
         )}
         {isRoot && <View className="mb-2" />}
 
-        {/* Personal Details */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Personal Details</Text>
-        <View className="bg-surface rounded-2xl px-4 border border-border mb-6">
-          <InfoRow label="Prefix" value={person.prefix} />
-          <InfoRow label="First Name" value={person.firstName} />
-          <InfoRow label={person.gender === "male" ? "Bin" : "Binti"} value={person.binBinti} />
-          <InfoRow label="Last Name" value={person.lastName} />
-          <InfoRow label="Gender" value={person.gender === "male" ? "Male (Lelaki)" : "Female (Perempuan)"} />
-          <InfoRow label="Date of Birth" value={person.birthDate} />
-          <InfoRow label="Place of Birth" value={person.birthPlace} />
-          {!person.isAlive && <InfoRow label="Date of Death" value={person.deathDate} />}
-          <InfoRow label="Ethnicity" value={person.race} />
-          <InfoRow label="Religion" value={person.religion} />
-          {person.bio && <InfoRow label="Notes" value={person.bio} />}
-        </View>
+        {/* Tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, marginBottom: 12 }}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+              >
+                <View
+                  className="rounded-full px-3 py-2 flex-row items-center gap-1"
+                  style={{
+                    backgroundColor: isActive ? colors.primary : colors.surface,
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.primary : colors.border,
+                  }}
+                >
+                  <Text
+                    className="text-xs font-medium"
+                    style={{ color: isActive ? "#fff" : colors.foreground }}
+                  >
+                    {tab.label}
+                  </Text>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <View
+                      className="rounded-full px-1.5 py-0.5 min-w-[18px] items-center"
+                      style={{ backgroundColor: isActive ? "rgba(255,255,255,0.3)" : colors.primary + "20" }}
+                    >
+                      <Text
+                        className="text-[10px] font-bold"
+                        style={{ color: isActive ? "#fff" : colors.primary }}
+                      >
+                        {tab.count}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-        {/* Relationships */}
-        <RelationCard label="Parents (Ibu Bapa)" persons={parents} onPress={navigateToPerson} colors={colors} />
-        <RelationCard label="Spouse(s) (Pasangan)" persons={spouses} onPress={navigateToPerson} colors={colors} />
-        <RelationCard label="Children (Anak)" persons={children} onPress={navigateToPerson} colors={colors} />
-        <RelationCard label="Siblings (Adik-Beradik)" persons={siblings} onPress={navigateToPerson} colors={colors} />
+        {/* Tab Content */}
+        {getTabContent()}
       </ScrollView>
     </ScreenContainer>
   );

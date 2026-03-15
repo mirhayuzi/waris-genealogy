@@ -49,10 +49,11 @@
 
 - [x] Fix: Photo upload - added Android permissions (READ_MEDIA_IMAGES, CAMERA, etc.)
 - [x] Feature: CSV export with folder structure (photos, data, relationships)
-- [ ] Feature: Persistent bottom tab bar visible in all sections
-- [ ] Feature: Family summary profile with tabs (Spouse, Parents, Grandchild, Great-grandchild)
-- [ ] Feature: Hierarchical card-based tree view (like reference APK)
-- [ ] Feature: Tree view with visible photos and connection lines
-- [ ] Feature: Zoomable/scrollable tree canvas
+- [x] Feature: CSV export button in Settings screen
+- [x] Feature: Bottom tab bar on main screens (Home, Tree, Tools, Settings) via expo-router tabs
+- [x] Feature: Family summary profile with tabs (Spouse, Parents, Grandchild, Great-grandchild)
+- [x] Feature: Hierarchical card-based tree view (like reference APK)
+- [x] Feature: Tree view with visible photos and connection lines
+- [x] Feature: Zoomable/scrollable tree canvas
 - [ ] Feature: Google Drive auto-sync like Fuelio app
-- [ ] Feature: Add Father/Mother buttons on tree nodes
+- [x] Feature: Add child buttons on tree nodes

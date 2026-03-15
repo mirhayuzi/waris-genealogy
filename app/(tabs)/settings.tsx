@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert, TextInput } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert, TextInput, Platform, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -6,6 +6,7 @@ import { useColors } from "@/hooks/use-colors";
 import { useFamily } from "@/lib/family-store";
 import { useI18n } from "@/lib/i18n";
 import { useState } from "react";
+import { exportFamilyDataAsCSV } from "@/lib/csv-export";
 
 function SettingsRow({ icon, title, subtitle, onPress, color, danger, rightElement }: {
   icon: any;
@@ -41,6 +42,49 @@ export default function SettingsScreen() {
   const { t, lang, toggleLang } = useI18n();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(data.familyName);
+  const [csvExporting, setCsvExporting] = useState(false);
+
+  const handleExportCSV = async () => {
+    if (data.persons.length === 0) {
+      Alert.alert(
+        lang === "bm" ? "Tiada Data" : "No Data",
+        lang === "bm" ? "Sila tambah ahli keluarga sebelum mengeksport." : "Please add family members before exporting."
+      );
+      return;
+    }
+    setCsvExporting(true);
+    try {
+      const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
+      if (result.success) {
+        let shared = false;
+        if (Platform.OS !== "web" && result.folderPath) {
+          try {
+            const Sharing = require("expo-sharing");
+            if (Sharing) {
+              const canShare = await Sharing.isAvailableAsync();
+              if (canShare) {
+                await Sharing.shareAsync(`${result.folderPath}/members.csv`, {
+                  mimeType: "text/csv",
+                  dialogTitle: lang === "bm" ? "Simpan Fail CSV" : "Save CSV Files",
+                });
+                shared = true;
+              }
+            }
+          } catch (_) {}
+        }
+        Alert.alert(
+          lang === "bm" ? "Berjaya!" : "Success!",
+          result.message + (shared ? "" : (lang === "bm" ? "\n\nFail disimpan dalam storan aplikasi." : "\n\nFiles saved to app storage."))
+        );
+      } else {
+        Alert.alert(lang === "bm" ? "Ralat" : "Error", result.message);
+      }
+    } catch (e: any) {
+      Alert.alert(lang === "bm" ? "Ralat" : "Error", `CSV export failed: ${e?.message || "Unknown error"}`);
+    } finally {
+      setCsvExporting(false);
+    }
+  };
 
   const handleSaveName = () => {
     if (nameInput.trim()) {
@@ -146,6 +190,21 @@ export default function SettingsScreen() {
             subtitle={t("backupRestoreDesc")}
             onPress={() => router.push("/backup-restore" as any)}
             color="#34C759"
+          />
+          <View className="h-px bg-border" />
+          <SettingsRow
+            icon="doc.text.fill"
+            title={lang === "bm" ? "Eksport CSV" : "Export CSV"}
+            subtitle={lang === "bm" ? "Simpan data keluarga sebagai fail CSV" : "Save family data as CSV files with photos"}
+            onPress={handleExportCSV}
+            color="#FF9500"
+            rightElement={
+              csvExporting ? (
+                <ActivityIndicator size="small" color="#FF9500" />
+              ) : (
+                <IconSymbol name="chevron.right" size={16} color={colors.muted} />
+              )
+            }
           />
           <View className="h-px bg-border" />
           <SettingsRow
