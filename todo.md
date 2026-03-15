@@ -67,3 +67,5 @@
 - [x] Bug: Fix ExpoSharing.shareAsync error on Android (replaced with direct Drive API)
 - [x] Feature: Create reusable skill for Google Drive CSV backup integration
 - [x] Bug: APK crashes immediately on launch - removed expo-sharing (FilePermissionService incompatible with SDK 54)
+- [x] Bug: APK still crashes - fixed expo-print/auth-session/crypto from v55 to SDK 54 compatible versions, removed unused expo-image-picker, added expo-font plugin
+- [x] Bug: APK still crashes on launch after expo-sharing removal - fixed: version mismatch (v55 packages on SDK 54)
