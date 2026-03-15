@@ -19,38 +19,22 @@ import {
   downloadAllFromDrive,
   exchangeCodeForTokens,
 } from "@/lib/google-drive";
+import { getApiBaseUrl } from "@/constants/oauth";
+import * as Linking from "expo-linking";
 
 // Lazy-load native modules
 let FileSystem: any = null;
-// expo-sharing removed - incompatible with SDK 54 (FilePermissionService removed)
-let MailComposer: any = null;
 let DocumentPicker: any = null;
 let WebBrowser: any = null;
-let AuthSession: any = null;
-let Crypto: any = null;
 
 try { FileSystem = require("expo-file-system/legacy"); } catch {}
-// expo-sharing removed - causes crash on Android
-try { MailComposer = require("expo-mail-composer"); } catch {}
 try { DocumentPicker = require("expo-document-picker"); } catch {}
 try { WebBrowser = require("expo-web-browser"); } catch {}
-try { AuthSession = require("expo-auth-session"); } catch {}
-try { Crypto = require("expo-crypto"); } catch {}
-
-// Dismiss web popup after auth
-try { WebBrowser?.maybeCompleteAuthSession(); } catch {}
 
 const BACKUP_DATE_KEY = "@waris_last_backup";
 const BACKUP_AUTO_KEY = "@waris_auto_backup";
 const BACKUP_WIFI_KEY = "@waris_wifi_only";
 const GOOGLE_CLIENT_ID_KEY = "@waris_google_client_id";
-
-// Google OAuth discovery
-const discovery = {
-  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-  tokenEndpoint: "https://oauth2.googleapis.com/token",
-  revocationEndpoint: "https://oauth2.googleapis.com/revoke",
-};
 
 export default function BackupRestoreScreen() {
   const router = useRouter();
@@ -115,107 +99,102 @@ export default function BackupRestoreScreen() {
       return;
     }
 
-    if (!AuthSession) {
-      Alert.alert(
-        lang === "bm" ? "Tidak Tersedia" : "Not Available",
-        lang === "bm" ? "Pengesahan Google tidak tersedia pada peranti ini." : "Google authentication is not available on this device.",
-      );
-      return;
-    }
-
     setSigningIn(true);
     try {
-      // Build redirect URI
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: "manus20260312144942" });
+      // Use server-side HTTPS redirect URI for Google OAuth
+      // Google requires HTTPS redirect URIs for web-type OAuth clients.
+      // Our server at /api/google/callback receives the code and redirects
+      // back to the app via custom scheme.
+      const apiBase = getApiBaseUrl();
+      const serverRedirectUri = `${apiBase}/api/google/callback`;
 
-      // Generate PKCE code verifier and challenge
-      let codeVerifier: string | undefined;
-      let codeChallenge: string | undefined;
+      // Build Google OAuth URL manually (no expo-auth-session needed)
+      const scopes = [
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ].join(" ");
 
-      if (Crypto) {
-        // Generate random code verifier
-        const randomBytes = await Crypto.getRandomBytesAsync(32);
-        codeVerifier = Array.from(new Uint8Array(randomBytes))
-          .map((b: number) => b.toString(16).padStart(2, "0"))
-          .join("")
-          .substring(0, 64);
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(serverRedirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&access_type=offline` +
+        `&prompt=consent`;
 
-        // SHA256 hash for code challenge
-        const digest = await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.SHA256,
-          codeVerifier,
-          { encoding: Crypto.CryptoEncoding.BASE64 },
-        );
-        // URL-safe base64
-        codeChallenge = digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      }
+      // Set up deep link listener to catch the callback
+      const handleDeepLink = async (event: { url: string }) => {
+        const url = event.url;
+        if (!url.includes("google-callback")) return;
 
-      const authRequestConfig: any = {
-        clientId,
-        scopes: [
-          "https://www.googleapis.com/auth/drive.file",
-          "https://www.googleapis.com/auth/userinfo.profile",
-          "https://www.googleapis.com/auth/userinfo.email",
-        ],
-        redirectUri,
-        responseType: "code",
-        usePKCE: true,
-        extraParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
-      };
+        // Remove listener
+        linkSubscription.remove();
 
-      if (codeChallenge && codeVerifier) {
-        authRequestConfig.codeChallenge = codeChallenge;
-        authRequestConfig.codeChallengeMethod = "S256";
-      }
+        // Parse the code from the URL
+        const urlObj = new URL(url);
+        const code = urlObj.searchParams.get("code");
+        const error = urlObj.searchParams.get("error");
 
-      const request = new AuthSession.AuthRequest(authRequestConfig);
-      await request.makeAuthUrlAsync(discovery);
-
-      const result = await request.promptAsync(discovery);
-
-      if (result.type === "success" && result.params?.code) {
-        const code = result.params.code;
-        const verifier = request.codeVerifier || codeVerifier;
-
-        // Exchange code for tokens
-        const tokenResult = await exchangeCodeForTokens(
-          code,
-          redirectUri,
-          clientId,
-          verifier,
-        );
-
-        if (tokenResult) {
-          setGoogleUser(tokenResult.user);
-          Alert.alert(
-            lang === "bm" ? "Berjaya!" : "Success!",
-            lang === "bm"
-              ? `Log masuk sebagai ${tokenResult.user.name}`
-              : `Signed in as ${tokenResult.user.name}`,
-          );
-        } else {
+        if (error) {
           Alert.alert(
             lang === "bm" ? "Ralat" : "Error",
-            lang === "bm" ? "Gagal mendapatkan token akses." : "Failed to get access token.",
+            `Google sign-in error: ${error}`,
           );
+          setSigningIn(false);
+          return;
         }
-      } else if (result.type === "error") {
-        Alert.alert(
-          lang === "bm" ? "Ralat" : "Error",
-          result.error?.message || "Authentication failed",
-        );
+
+        if (code) {
+          // Exchange code for tokens using the server redirect URI
+          const tokenResult = await exchangeCodeForTokens(
+            code,
+            serverRedirectUri,
+            clientId,
+          );
+
+          if (tokenResult) {
+            setGoogleUser(tokenResult.user);
+            Alert.alert(
+              lang === "bm" ? "Berjaya!" : "Success!",
+              lang === "bm"
+                ? `Log masuk sebagai ${tokenResult.user.name}`
+                : `Signed in as ${tokenResult.user.name}`,
+            );
+          } else {
+            Alert.alert(
+              lang === "bm" ? "Ralat" : "Error",
+              lang === "bm" ? "Gagal mendapatkan token akses." : "Failed to get access token.",
+            );
+          }
+        }
+        setSigningIn(false);
+      };
+
+      // Listen for deep link callback
+      const linkSubscription = Linking.addEventListener("url", handleDeepLink);
+
+      // Open the Google OAuth URL in the system browser
+      if (WebBrowser) {
+        await WebBrowser.openBrowserAsync(authUrl, {
+          showInRecents: true,
+          createTask: false,
+        });
+      } else {
+        await Linking.openURL(authUrl);
       }
-      // If "dismiss" or "cancel", do nothing
+
+      // Set a timeout to clean up if user doesn't complete sign-in
+      setTimeout(() => {
+        linkSubscription.remove();
+        setSigningIn(false);
+      }, 120000); // 2 minute timeout
     } catch (e: any) {
       console.error("Google Sign-In error:", e);
       Alert.alert(
         lang === "bm" ? "Ralat" : "Error",
         `Sign-in failed: ${e?.message || "Unknown error"}`,
       );
-    } finally {
       setSigningIn(false);
     }
   };

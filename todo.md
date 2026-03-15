@@ -70,3 +70,4 @@
 - [x] Bug: APK still crashes - fixed expo-print/auth-session/crypto from v55 to SDK 54 compatible versions, removed unused expo-image-picker, added expo-font plugin
 - [x] Bug: APK still crashes on launch after expo-sharing removal - fixed: version mismatch (v55 packages on SDK 54)
 - [x] Update Google OAuth Client ID to new dedicated project
+- [x] Bug: Google OAuth 'Access blocked' - fixed with server-side HTTPS proxy redirect at /api/google/callback

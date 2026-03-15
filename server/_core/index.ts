@@ -60,6 +60,32 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Google OAuth callback proxy
+  // The app redirects Google OAuth to this HTTPS endpoint.
+  // After Google sends the auth code here, we redirect to the app's custom scheme.
+  app.get("/api/google/callback", (req, res) => {
+    const { code, error, state } = req.query;
+    const appScheme = "manus20260312144942";
+
+    if (error) {
+      // Redirect error back to app
+      res.redirect(`${appScheme}://google-callback?error=${encodeURIComponent(String(error))}`);
+      return;
+    }
+
+    if (code) {
+      // Redirect auth code back to app via custom scheme
+      let redirectUrl = `${appScheme}://google-callback?code=${encodeURIComponent(String(code))}`;
+      if (state) {
+        redirectUrl += `&state=${encodeURIComponent(String(state))}`;
+      }
+      res.redirect(redirectUrl);
+      return;
+    }
+
+    res.status(400).send("Missing code or error parameter");
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
