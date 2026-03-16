@@ -1,35 +1,25 @@
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * Google Drive Integration
- * Implements Google Sign-In via OAuth2 and Google Drive REST API
- * for direct CSV backup/restore (Fuelio-style).
+ * Uses @react-native-google-signin/google-signin for native authentication
+ * and Google Drive REST API for CSV backup/restore (Fuelio-style).
  */
 
-const GOOGLE_AUTH_KEY = "@waris_google_auth";
 const GOOGLE_USER_KEY = "@waris_google_user";
-
-// Google OAuth2 endpoints
-const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
-const GOOGLE_USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo";
 
 // Google Drive API endpoints
 const DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files";
 
-// Scopes needed for Drive file access
-const SCOPES = [
-  "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/userinfo.profile",
-  "https://www.googleapis.com/auth/userinfo.email",
-];
-
 // App folder name on Google Drive
 const DRIVE_FOLDER_NAME = "Waris Genealogy";
+
+// Scopes needed for Drive file access
+const DRIVE_SCOPES = [
+  "https://www.googleapis.com/auth/drive.file",
+];
 
 export interface GoogleUser {
   name: string;
@@ -44,56 +34,111 @@ export interface DriveFile {
   size?: string;
 }
 
-interface AuthTokens {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: number;
+// Lazy-load the native Google Sign-In module
+let GoogleSigninModule: any = null;
+try {
+  GoogleSigninModule = require("@react-native-google-signin/google-signin");
+} catch {
+  // Not available (web or missing native module)
 }
 
 /**
- * Store auth tokens securely
+ * Configure Google Sign-In (call once at app start).
+ * Uses the Web Client ID for getting idToken and server auth code.
+ * The Android Client ID is automatically used based on SHA-1 + package name.
  */
-async function storeTokens(tokens: AuthTokens): Promise<void> {
-  const value = JSON.stringify(tokens);
-  if (Platform.OS !== "web") {
-    await SecureStore.setItemAsync(GOOGLE_AUTH_KEY, value);
-  } else {
-    await AsyncStorage.setItem(GOOGLE_AUTH_KEY, value);
+export function configureGoogleSignIn(): void {
+  if (!GoogleSigninModule || Platform.OS === "web") return;
+
+  const { GoogleSignin } = GoogleSigninModule;
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
+
+  GoogleSignin.configure({
+    webClientId: webClientId || undefined,
+    scopes: DRIVE_SCOPES,
+    offlineAccess: false,
+  });
+}
+
+/**
+ * Sign in with native Google Sign-In.
+ * Returns user info on success, null on failure/cancel.
+ */
+export async function nativeGoogleSignIn(): Promise<GoogleUser | null> {
+  if (!GoogleSigninModule || Platform.OS === "web") {
+    throw new Error("Google Sign-In is not available on this platform.");
   }
-}
 
-/**
- * Get stored auth tokens
- */
-async function getStoredTokens(): Promise<AuthTokens | null> {
+  const { GoogleSignin, isSuccessResponse, statusCodes, isErrorWithCode } = GoogleSigninModule;
+
   try {
-    let value: string | null;
-    if (Platform.OS !== "web") {
-      value = await SecureStore.getItemAsync(GOOGLE_AUTH_KEY);
-    } else {
-      value = await AsyncStorage.getItem(GOOGLE_AUTH_KEY);
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const response = await GoogleSignin.signIn();
+
+    if (isSuccessResponse(response)) {
+      const userData = response.data;
+      const user: GoogleUser = {
+        name: userData.user?.name || userData.user?.email || "User",
+        email: userData.user?.email || "",
+        picture: userData.user?.photo || undefined,
+      };
+      await storeUser(user);
+      return user;
     }
-    if (!value) return null;
-    return JSON.parse(value) as AuthTokens;
-  } catch {
+
+    // User cancelled
     return null;
+  } catch (error: any) {
+    if (isErrorWithCode(error)) {
+      switch (error.code) {
+        case statusCodes.IN_PROGRESS:
+          throw new Error("Sign-in already in progress");
+        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+          throw new Error("Google Play Services not available. Please update.");
+        default:
+          throw new Error(`Google Sign-In error: ${error.code} - ${error.message}`);
+      }
+    }
+    throw error;
   }
 }
 
 /**
- * Clear stored tokens
+ * Get a valid access token from the native Google Sign-In.
+ * The native module handles token refresh automatically.
  */
-async function clearTokens(): Promise<void> {
-  if (Platform.OS !== "web") {
-    await SecureStore.deleteItemAsync(GOOGLE_AUTH_KEY);
-  } else {
-    await AsyncStorage.removeItem(GOOGLE_AUTH_KEY);
+export async function getAccessToken(): Promise<string | null> {
+  if (!GoogleSigninModule || Platform.OS === "web") return null;
+
+  const { GoogleSignin } = GoogleSigninModule;
+
+  try {
+    // Check if user is signed in
+    const currentUser = GoogleSignin.getCurrentUser();
+    if (!currentUser) return null;
+
+    // getTokens() returns fresh tokens (auto-refreshed if expired)
+    const tokens = await GoogleSignin.getTokens();
+    return tokens.accessToken || null;
+  } catch (e) {
+    console.error("getAccessToken error:", e);
+
+    // Try to clear cached token and retry once
+    try {
+      const tokens = await GoogleSignin.getTokens();
+      if (tokens.accessToken) {
+        await GoogleSignin.clearCachedAccessToken(tokens.accessToken);
+      }
+      const freshTokens = await GoogleSignin.getTokens();
+      return freshTokens.accessToken || null;
+    } catch {
+      return null;
+    }
   }
-  await AsyncStorage.removeItem(GOOGLE_USER_KEY);
 }
 
 /**
- * Store user info
+ * Store user info in AsyncStorage
  */
 async function storeUser(user: GoogleUser): Promise<void> {
   await AsyncStorage.setItem(GOOGLE_USER_KEY, JSON.stringify(user));
@@ -104,6 +149,22 @@ async function storeUser(user: GoogleUser): Promise<void> {
  */
 export async function getStoredUser(): Promise<GoogleUser | null> {
   try {
+    // First check native sign-in state
+    if (GoogleSigninModule && Platform.OS !== "web") {
+      const { GoogleSignin } = GoogleSigninModule;
+      const currentUser = GoogleSignin.getCurrentUser();
+      if (currentUser) {
+        const user: GoogleUser = {
+          name: currentUser.user?.name || currentUser.user?.email || "User",
+          email: currentUser.user?.email || "",
+          picture: currentUser.user?.photo || undefined,
+        };
+        await storeUser(user);
+        return user;
+      }
+    }
+
+    // Fallback to AsyncStorage
     const value = await AsyncStorage.getItem(GOOGLE_USER_KEY);
     if (!value) return null;
     return JSON.parse(value) as GoogleUser;
@@ -113,195 +174,29 @@ export async function getStoredUser(): Promise<GoogleUser | null> {
 }
 
 /**
- * Get a valid access token (refreshing if needed)
- */
-export async function getAccessToken(): Promise<string | null> {
-  const tokens = await getStoredTokens();
-  if (!tokens) return null;
-
-  // Check if token is still valid (with 5 min buffer)
-  if (Date.now() < tokens.expiresAt - 300000) {
-    return tokens.accessToken;
-  }
-
-  // Token expired - try to refresh
-  if (tokens.refreshToken) {
-    try {
-      const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: tokens.refreshToken,
-          client_id: await getClientId(),
-        }).toString(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newTokens: AuthTokens = {
-          accessToken: data.access_token,
-          refreshToken: tokens.refreshToken,
-          expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-        };
-        await storeTokens(newTokens);
-        return newTokens.accessToken;
-      }
-    } catch (e) {
-      console.error("Token refresh failed:", e);
-    }
-  }
-
-  // Refresh failed, clear tokens
-  await clearTokens();
-  return null;
-}
-
-/**
- * Get client ID from environment
- */
-async function getClientId(): Promise<string> {
-  // Try to get from env vars
-  const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || "";
-  return clientId;
-}
-
-/**
- * Build the Google OAuth authorization URL
- */
-export function getAuthorizationUrl(redirectUri: string, clientId: string): string {
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: SCOPES.join(" "),
-    access_type: "offline",
-    prompt: "consent",
-  });
-  return `${GOOGLE_AUTH_ENDPOINT}?${params.toString()}`;
-}
-
-/**
- * Exchange authorization code for tokens
- */
-export async function exchangeCodeForTokens(
-  code: string,
-  redirectUri: string,
-  clientId: string,
-  clientSecret?: string,
-): Promise<{ tokens: AuthTokens; user: GoogleUser } | null> {
-  try {
-    const body: Record<string, string> = {
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-    };
-    if (clientSecret) {
-      body.client_secret = clientSecret;
-    }
-
-    const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(body).toString(),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Token exchange failed:", errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    const tokens: AuthTokens = {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-    };
-
-    await storeTokens(tokens);
-
-    // Fetch user info
-    const user = await fetchUserInfo(tokens.accessToken);
-    if (user) {
-      await storeUser(user);
-    }
-
-    return { tokens, user: user || { name: "Unknown", email: "" } };
-  } catch (e) {
-    console.error("Code exchange error:", e);
-    return null;
-  }
-}
-
-/**
- * Fetch user info from Google
- */
-async function fetchUserInfo(accessToken: string): Promise<GoogleUser | null> {
-  try {
-    const response = await fetch(GOOGLE_USERINFO_ENDPOINT, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return {
-      name: data.name || data.email || "User",
-      email: data.email || "",
-      picture: data.picture,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Store tokens received from server-side OAuth exchange and fetch user info.
- * The server already exchanged the auth code for tokens.
- */
-export async function storeServerTokens(params: {
-  accessToken: string;
-  refreshToken?: string;
-  expiresIn: number;
-}): Promise<GoogleUser | null> {
-  const tokens: AuthTokens = {
-    accessToken: params.accessToken,
-    refreshToken: params.refreshToken,
-    expiresAt: Date.now() + params.expiresIn * 1000,
-  };
-  await storeTokens(tokens);
-
-  // Fetch and store user info
-  const user = await fetchUserInfo(tokens.accessToken);
-  if (user) {
-    await storeUser(user);
-  }
-  return user;
-}
-
-/**
- * Sign out - revoke token and clear stored data
+ * Sign out from Google
  */
 export async function signOut(): Promise<void> {
-  const tokens = await getStoredTokens();
-  if (tokens?.accessToken) {
+  if (GoogleSigninModule && Platform.OS !== "web") {
+    const { GoogleSignin } = GoogleSigninModule;
     try {
-      await fetch(`${GOOGLE_REVOKE_ENDPOINT}?token=${tokens.accessToken}`, {
-        method: "POST",
-      });
+      await GoogleSignin.signOut();
     } catch {
-      // Ignore revocation errors
+      // Ignore sign-out errors
     }
   }
-  await clearTokens();
+  await AsyncStorage.removeItem(GOOGLE_USER_KEY);
 }
 
 /**
  * Check if user is signed in
  */
 export async function isSignedIn(): Promise<boolean> {
-  const token = await getAccessToken();
-  return token !== null;
+  if (GoogleSigninModule && Platform.OS !== "web") {
+    const { GoogleSignin } = GoogleSigninModule;
+    return GoogleSignin.hasPreviousSignIn();
+  }
+  return false;
 }
 
 // ==================== GOOGLE DRIVE API ====================
@@ -403,11 +298,9 @@ export async function uploadCSVToDrive(
     let method: string;
 
     if (existingFileId) {
-      // Update existing file
       uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}/${existingFileId}?uploadType=multipart`;
       method = "PATCH";
     } else {
-      // Create new file
       uploadUrl = `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`;
       method = "POST";
     }

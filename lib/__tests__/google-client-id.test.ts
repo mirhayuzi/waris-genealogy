@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 
-describe("Google OAuth Client ID", () => {
-  it("should have EXPO_PUBLIC_GOOGLE_CLIENT_ID set", () => {
-    const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+describe("Google OAuth Web Client ID", () => {
+  it("should have EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID set", () => {
+    const clientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     expect(clientId).toBeDefined();
     expect(clientId).not.toBe("");
   });
 
   it("should be a valid Google Client ID format", () => {
-    const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID!;
+    const clientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
     // Google Client IDs end with .apps.googleusercontent.com
     expect(clientId).toMatch(/\.apps\.googleusercontent\.com$/);
     // Should have a numeric project ID prefix

@@ -5,7 +5,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { useI18n } from "@/lib/i18n";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FamilyData } from "@/lib/types";
 import { exportFamilyDataAsCSV } from "@/lib/csv-export";
@@ -13,28 +13,23 @@ import { parseMembersCSV, parseMarriagesCSV, parseParentChildCSV, buildFamilyDat
 import {
   GoogleUser,
   getStoredUser,
-  getAccessToken,
   signOut as googleSignOut,
   syncAllToDrive,
   downloadAllFromDrive,
-  storeServerTokens,
+  configureGoogleSignIn,
+  nativeGoogleSignIn,
 } from "@/lib/google-drive";
-import { getApiBaseUrl } from "@/constants/oauth";
-import * as Linking from "expo-linking";
 
 // Lazy-load native modules
 let FileSystem: any = null;
 let DocumentPicker: any = null;
-let WebBrowser: any = null;
 
 try { FileSystem = require("expo-file-system/legacy"); } catch {}
 try { DocumentPicker = require("expo-document-picker"); } catch {}
-try { WebBrowser = require("expo-web-browser"); } catch {}
 
 const BACKUP_DATE_KEY = "@waris_last_backup";
 const BACKUP_AUTO_KEY = "@waris_auto_backup";
 const BACKUP_WIFI_KEY = "@waris_wifi_only";
-const GOOGLE_CLIENT_ID_KEY = "@waris_google_client_id";
 
 export default function BackupRestoreScreen() {
   const router = useRouter();
@@ -56,6 +51,11 @@ export default function BackupRestoreScreen() {
   const [autoBackup, setAutoBackup] = useState(false);
   const [wifiOnly, setWifiOnly] = useState(true);
 
+  // Configure Google Sign-In on mount
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
+
   // Load saved state
   useEffect(() => {
     AsyncStorage.getItem(BACKUP_DATE_KEY).then((d) => { if (d) setLastBackup(d); });
@@ -75,128 +75,40 @@ export default function BackupRestoreScreen() {
     AsyncStorage.setItem(BACKUP_WIFI_KEY, String(val));
   };
 
-  // ==================== GOOGLE SIGN-IN ====================
-
-  const getClientId = useCallback(async (): Promise<string> => {
-    // Check env var first
-    const envClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-    if (envClientId) return envClientId;
-    // Check stored value
-    const stored = await AsyncStorage.getItem(GOOGLE_CLIENT_ID_KEY);
-    if (stored) return stored;
-    return "";
-  }, []);
+  // ==================== GOOGLE SIGN-IN (Native) ====================
 
   const handleGoogleSignIn = async () => {
-    const clientId = await getClientId();
-    if (!clientId) {
+    if (Platform.OS === "web") {
       Alert.alert(
-        lang === "bm" ? "Konfigurasi Diperlukan" : "Configuration Required",
+        lang === "bm" ? "Tidak Tersedia" : "Not Available",
         lang === "bm"
-          ? "Google Client ID diperlukan untuk log masuk Google Drive. Sila hubungi pembangun aplikasi."
-          : "Google Client ID is required for Google Drive sign-in. Please contact the app developer.",
+          ? "Google Sign-In hanya tersedia pada peranti mudah alih."
+          : "Google Sign-In is only available on mobile devices.",
       );
       return;
     }
 
     setSigningIn(true);
     try {
-      // Use server-side HTTPS redirect URI for Google OAuth
-      // Google requires HTTPS redirect URIs for web-type OAuth clients.
-      // Our server at /api/google/callback receives the code and redirects
-      // back to the app via custom scheme.
-      const apiBase = getApiBaseUrl();
-      const serverRedirectUri = `${apiBase}/api/google/callback`;
+      const user = await nativeGoogleSignIn();
 
-      // Build Google OAuth URL manually (no expo-auth-session needed)
-      const scopes = [
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/userinfo.profile",
-        "https://www.googleapis.com/auth/userinfo.email",
-      ].join(" ");
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent(serverRedirectUri)}` +
-        `&response_type=code` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&access_type=offline` +
-        `&prompt=consent`;
-
-      // Set up deep link listener to catch the callback
-      const handleDeepLink = async (event: { url: string }) => {
-        const url = event.url;
-        if (!url.includes("google-callback")) return;
-
-        // Remove listener
-        linkSubscription.remove();
-
-        // Parse tokens from the URL (server already exchanged the code)
-        const urlObj = new URL(url);
-        const accessToken = urlObj.searchParams.get("access_token");
-        const refreshToken = urlObj.searchParams.get("refresh_token");
-        const expiresIn = urlObj.searchParams.get("expires_in");
-        const error = urlObj.searchParams.get("error");
-
-        if (error) {
-          Alert.alert(
-            lang === "bm" ? "Ralat" : "Error",
-            `Google sign-in error: ${error}`,
-          );
-          setSigningIn(false);
-          return;
-        }
-
-        if (accessToken) {
-          // Server already exchanged the code for tokens — just store them
-          const user = await storeServerTokens({
-            accessToken,
-            refreshToken: refreshToken || undefined,
-            expiresIn: parseInt(expiresIn || "3600", 10),
-          });
-
-          if (user) {
-            setGoogleUser(user);
-            Alert.alert(
-              lang === "bm" ? "Berjaya!" : "Success!",
-              lang === "bm"
-                ? `Log masuk sebagai ${user.name}`
-                : `Signed in as ${user.name}`,
-            );
-          } else {
-            Alert.alert(
-              lang === "bm" ? "Ralat" : "Error",
-              lang === "bm" ? "Gagal mendapatkan maklumat pengguna." : "Failed to get user info.",
-            );
-          }
-        }
-        setSigningIn(false);
-      };
-
-      // Listen for deep link callback
-      const linkSubscription = Linking.addEventListener("url", handleDeepLink);
-
-      // Open the Google OAuth URL in the system browser
-      if (WebBrowser) {
-        await WebBrowser.openBrowserAsync(authUrl, {
-          showInRecents: true,
-          createTask: false,
-        });
-      } else {
-        await Linking.openURL(authUrl);
+      if (user) {
+        setGoogleUser(user);
+        Alert.alert(
+          lang === "bm" ? "Berjaya!" : "Success!",
+          lang === "bm"
+            ? `Log masuk sebagai ${user.name}`
+            : `Signed in as ${user.name}`,
+        );
       }
-
-      // Set a timeout to clean up if user doesn't complete sign-in
-      setTimeout(() => {
-        linkSubscription.remove();
-        setSigningIn(false);
-      }, 120000); // 2 minute timeout
+      // If null, user cancelled — no alert needed
     } catch (e: any) {
       console.error("Google Sign-In error:", e);
       Alert.alert(
         lang === "bm" ? "Ralat" : "Error",
         `Sign-in failed: ${e?.message || "Unknown error"}`,
       );
+    } finally {
       setSigningIn(false);
     }
   };

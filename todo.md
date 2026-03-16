@@ -71,6 +71,9 @@
 - [x] Bug: APK still crashes on launch after expo-sharing removal - fixed: version mismatch (v55 packages on SDK 54)
 - [x] Update Google OAuth Client ID to new dedicated project
 - [x] Bug: Google OAuth 'Access blocked' - fixed with server-side HTTPS proxy redirect at /api/google/callback
-- [ ] Update Google OAuth Client ID and Client Secret to new Android-type credentials
+- [x] Update Google OAuth Client ID and Client Secret to new Android-type credentials (now uses EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID)
 - [x] Feature: Export CSV shows SAF file picker so user chooses save location before saving
 - [x] Fix: Complete server-side Google OAuth token exchange (server exchanges code, returns tokens to app)
+- [x] Bug: Google Sign-In still blocked - OAuth access denied when user tries to sign in on Android APK (switched to native Google Sign-In)
+- [x] Feature: Switch to Android-native Google Sign-In (Option A) using @react-native-google-signin/google-signin
+- [x] Feature: Remove server-side OAuth callback dependency for Google Sign-In

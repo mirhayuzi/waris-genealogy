@@ -96,6 +96,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-font",
+    "@react-native-google-signin/google-signin",
     [
       "expo-audio",
       {
