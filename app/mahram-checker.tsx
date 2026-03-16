@@ -1,4 +1,5 @@
-import { Text, View, Pressable, ScrollView } from "react-native";
+import { Text, View, Pressable, ScrollView, TextInput, Modal, FlatList, Platform } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -93,12 +94,128 @@ function checkMahram(
   return { isMahram: false, relationship: "Not Mahram", ruling: "No Mahram relationship found between these two people based on the family tree data. They are non-Mahram (Ajnabi)." };
 }
 
+function PersonPickerModal({ visible, onClose, persons, selectedId, onSelect, title, accentColor, colors }: {
+  visible: boolean;
+  onClose: () => void;
+  persons: Person[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  title: string;
+  accentColor: string;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [search, setSearch] = useState("");
+
+  const filtered = search.trim()
+    ? persons.filter((p) => {
+        const q = search.toLowerCase();
+        return getDisplayName(p).toLowerCase().includes(q)
+          || (p.firstName || "").toLowerCase().includes(q)
+          || (p.lastName || "").toLowerCase().includes(q)
+          || (p.binBinti || "").toLowerCase().includes(q);
+      })
+    : persons;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <Pressable
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}
+        onPress={() => { onClose(); setSearch(""); }}
+      >
+        <Pressable style={{ maxHeight: "70%" }}>
+          <View className="bg-background rounded-t-3xl" style={{ paddingBottom: Platform.OS === "ios" ? 34 : 20 }}>
+            <View className="items-center py-3">
+              <View className="w-10 h-1 rounded-full bg-border" />
+            </View>
+            <Text className="text-base font-semibold text-foreground px-5 mb-1">{title}</Text>
+            <Text className="text-xs text-muted px-5 mb-3">
+              Select a Muslim family member
+            </Text>
+
+            {/* Search Input */}
+            <View className="px-5 mb-3">
+              <View className="flex-row items-center bg-surface rounded-xl border border-border px-3 py-2 gap-2">
+                <IconSymbol name="magnifyingglass" size={16} color={colors.muted} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search members..."
+                  placeholderTextColor={colors.muted}
+                  style={{ flex: 1, fontSize: 14, color: colors.foreground, padding: 0 }}
+                  autoFocus
+                  returnKeyType="done"
+                />
+                {search.length > 0 && (
+                  <Pressable onPress={() => setSearch("")} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+                    <IconSymbol name="xmark" size={14} color={colors.muted} />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {filtered.length === 0 ? (
+              <View className="px-5 py-6 items-center">
+                <Text className="text-sm text-muted">
+                  {search.trim() ? "No members match your search." : "No Muslim members available."}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => {
+                  const isSelected = selectedId === item.id;
+                  return (
+                    <Pressable
+                      onPress={() => { onSelect(item.id); onClose(); setSearch(""); }}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                    >
+                      <View
+                        className="flex-row items-center px-5 py-3 gap-3 border-b border-border"
+                        style={isSelected ? { backgroundColor: accentColor + "10" } : undefined}
+                      >
+                        {item.photo ? (
+                          <Image source={{ uri: item.photo }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
+                        ) : (
+                          <View
+                            className="w-9 h-9 rounded-full items-center justify-center"
+                            style={{ backgroundColor: accentColor + "15" }}
+                          >
+                            <Text className="text-xs font-bold" style={{ color: accentColor }}>
+                              {item.firstName.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View className="flex-1">
+                          <Text className="text-sm font-medium text-foreground">{getDisplayName(item)}</Text>
+                          <Text className="text-xs text-muted">
+                            {item.gender === "male" ? "Male" : "Female"} · {item.religion}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <IconSymbol name="checkmark" size={16} color={accentColor} />
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function MahramCheckerScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data, getParents, getChildren, getSpouses, getSiblings } = useFamily();
   const [personAId, setPersonAId] = useState<string | null>(null);
   const [personBId, setPersonBId] = useState<string | null>(null);
+  const [showPickerA, setShowPickerA] = useState(false);
+  const [showPickerB, setShowPickerB] = useState(false);
 
   const personA = personAId ? data.persons.find((p) => p.id === personAId) : null;
   const personB = personBId ? data.persons.find((p) => p.id === personBId) : null;
@@ -109,6 +226,51 @@ export default function MahramCheckerScreen() {
   }, [personAId, personBId, data]);
 
   const muslimPersons = data.persons.filter((p) => p.religion === "Islam");
+  const muslimPersonsForB = muslimPersons.filter((p) => p.id !== personAId);
+
+  const renderSelectedPerson = (person: Person | null, label: string, accentColor: string, onPress: () => void) => (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
+      <View
+        className="rounded-2xl border p-4 mb-4"
+        style={{
+          borderColor: person ? accentColor + "40" : colors.border,
+          backgroundColor: person ? accentColor + "08" : colors.surface,
+        }}
+      >
+        {person ? (
+          <View className="flex-row items-center gap-3">
+            {person.photo ? (
+              <Image source={{ uri: person.photo }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
+            ) : (
+              <View
+                className="w-11 h-11 rounded-full items-center justify-center"
+                style={{ backgroundColor: accentColor + "20" }}
+              >
+                <Text className="text-base font-bold" style={{ color: accentColor }}>
+                  {person.firstName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View className="flex-1">
+              <Text className="text-xs text-muted uppercase tracking-wider mb-0.5">{label}</Text>
+              <Text className="text-sm font-semibold text-foreground">{getDisplayName(person)}</Text>
+              <Text className="text-xs text-muted">
+                {person.gender === "male" ? "Male" : "Female"} · {person.religion}
+              </Text>
+            </View>
+            <IconSymbol name="pencil" size={14} color={colors.muted} />
+          </View>
+        ) : (
+          <View className="flex-row items-center justify-center gap-2 py-2">
+            <IconSymbol name="magnifyingglass" size={16} color={accentColor} />
+            <Text className="text-sm font-medium" style={{ color: accentColor }}>
+              Tap to select {label}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
 
   return (
     <ScreenContainer className="pt-2">
@@ -134,61 +296,11 @@ export default function MahramCheckerScreen() {
 
         {/* Person A Selector */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Person 1</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-          <View className="flex-row gap-2">
-            {muslimPersons.map((person) => (
-              <Pressable
-                key={person.id}
-                onPress={() => setPersonAId(person.id)}
-                style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View
-                  className="px-4 py-2.5 rounded-xl border"
-                  style={{
-                    backgroundColor: personAId === person.id ? colors.primary : "transparent",
-                    borderColor: personAId === person.id ? colors.primary : colors.border,
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: personAId === person.id ? "#fff" : colors.foreground }}
-                  >
-                    {person.firstName}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
+        {renderSelectedPerson(personA || null, "Person 1", colors.primary, () => setShowPickerA(true))}
 
         {/* Person B Selector */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Person 2</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
-          <View className="flex-row gap-2">
-            {muslimPersons.filter((p) => p.id !== personAId).map((person) => (
-              <Pressable
-                key={person.id}
-                onPress={() => setPersonBId(person.id)}
-                style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View
-                  className="px-4 py-2.5 rounded-xl border"
-                  style={{
-                    backgroundColor: personBId === person.id ? colors.accent : "transparent",
-                    borderColor: personBId === person.id ? colors.accent : colors.border,
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: personBId === person.id ? "#fff" : colors.foreground }}
-                  >
-                    {person.firstName}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
+        {renderSelectedPerson(personB || null, "Person 2", colors.accent, () => setShowPickerB(true))}
 
         {/* Result */}
         {result && personA && personB && (
@@ -248,6 +360,28 @@ export default function MahramCheckerScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Person Picker Modals */}
+      <PersonPickerModal
+        visible={showPickerA}
+        onClose={() => setShowPickerA(false)}
+        persons={muslimPersons}
+        selectedId={personAId}
+        onSelect={setPersonAId}
+        title="Select Person 1"
+        accentColor={colors.primary}
+        colors={colors}
+      />
+      <PersonPickerModal
+        visible={showPickerB}
+        onClose={() => setShowPickerB(false)}
+        persons={muslimPersonsForB}
+        selectedId={personBId}
+        onSelect={setPersonBId}
+        title="Select Person 2"
+        accentColor={colors.accent}
+        colors={colors}
+      />
     </ScreenContainer>
   );
 }

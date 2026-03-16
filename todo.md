@@ -77,3 +77,10 @@
 - [x] Bug: Google Sign-In still blocked - OAuth access denied when user tries to sign in on Android APK (switched to native Google Sign-In)
 - [x] Feature: Switch to Android-native Google Sign-In (Option A) using @react-native-google-signin/google-signin
 - [x] Feature: Remove server-side OAuth callback dependency for Google Sign-In
+
+## Bug Fixes & Improvements (Phase 3)
+
+- [x] Bug: Delete member (red recycle bin) crashes and exits the app
+- [x] Bug: Member picker list cannot scroll when too many members; add search button for spouse/child/parent selection
+- [x] Feature: Add extended family relationships to member profile - sepupu 1 kali, sepupu 2 kali, sepupu 3 kali, anak buah, pakcik, makcik, ipar, datuk saudara, nenek saudara
+- [x] Feature: Add search members functionality to Mahram checker (both member selectors)

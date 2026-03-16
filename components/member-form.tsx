@@ -475,15 +475,27 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
   const colors = useColors();
   const [showPicker, setShowPicker] = useState(false);
   const [linkType, setLinkType] = useState<"spouse" | "parent" | "child">("spouse");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const availablePersons = persons.filter((p) => {
     if (currentPersonId && p.id === currentPersonId) return false;
     return !selectedLinks.some((l) => l.personId === p.id);
   });
 
+  const filteredPersons = searchQuery.trim()
+    ? availablePersons.filter((p) => {
+        const q = searchQuery.toLowerCase();
+        return getDisplayName(p).toLowerCase().includes(q)
+          || (p.firstName || "").toLowerCase().includes(q)
+          || (p.lastName || "").toLowerCase().includes(q)
+          || (p.binBinti || "").toLowerCase().includes(q);
+      })
+    : availablePersons;
+
   const addLink = (personId: string) => {
     onLinksChange([...selectedLinks, { type: linkType, personId }]);
     setShowPicker(false);
+    setSearchQuery("");
   };
 
   const removeLink = (personId: string) => {
@@ -574,13 +586,34 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
                 Choose a family member to link as {linkTypeLabel(linkType).toLowerCase()}
               </Text>
 
-              {availablePersons.length === 0 ? (
+              {/* Search Input */}
+              <View className="px-5 mb-3">
+                <View className="flex-row items-center bg-surface rounded-xl border border-border px-3 py-2 gap-2">
+                  <IconSymbol name="magnifyingglass" size={16} color={colors.muted} />
+                  <TextInput
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder="Search members..."
+                    placeholderTextColor={colors.muted}
+                    style={{ flex: 1, fontSize: 14, color: colors.foreground, padding: 0 }}
+                    autoFocus
+                    returnKeyType="done"
+                  />
+                  {searchQuery.length > 0 && (
+                    <Pressable onPress={() => setSearchQuery("")} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+                      <IconSymbol name="xmark" size={14} color={colors.muted} />
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              {filteredPersons.length === 0 ? (
                 <View className="px-5 py-6 items-center">
                   <Text className="text-sm text-muted">No available members to link.</Text>
                 </View>
               ) : (
                 <FlatList
-                  data={availablePersons}
+                  data={filteredPersons}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
                     <Pressable

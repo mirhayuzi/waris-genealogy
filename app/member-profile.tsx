@@ -9,7 +9,7 @@ import { getDisplayName, Person } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { useState, useMemo } from "react";
 
-type TabKey = "details" | "spouse" | "parents" | "children" | "grandchildren" | "great-grandchildren" | "siblings";
+type TabKey = "details" | "spouse" | "parents" | "children" | "grandchildren" | "great-grandchildren" | "siblings" | "uncle-aunt" | "nephew-niece" | "cousin1" | "cousin2" | "cousin3" | "in-law" | "great-uncle-aunt";
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -79,6 +79,12 @@ export default function MemberProfileScreen() {
   const spouses = getSpouses(person.id);
   const siblings = getSiblings(person.id);
 
+  // Helper: get unique persons from IDs
+  const getPersonsByIds = (ids: string[]): Person[] => {
+    const unique = [...new Set(ids)];
+    return unique.map((pid) => data.persons.find((p) => p.id === pid)).filter(Boolean) as Person[];
+  };
+
   // Compute grandchildren: children of children
   const grandchildren = useMemo(() => {
     const result: Person[] = [];
@@ -109,6 +115,130 @@ export default function MemberProfileScreen() {
     return result;
   }, [grandchildren, getChildren]);
 
+  // Pakcik / Makcik (Uncles / Aunts) — siblings of parents
+  const unclesAunts = useMemo(() => {
+    const ids: string[] = [];
+    for (const parent of parents) {
+      for (const sib of getSiblings(parent.id)) {
+        if (sib.id !== person.id) ids.push(sib.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [parents, getSiblings, person.id, data.persons]);
+
+  // Anak Buah (Nieces / Nephews) — children of siblings
+  const nephewsNieces = useMemo(() => {
+    const ids: string[] = [];
+    for (const sib of siblings) {
+      for (const child of getChildren(sib.id)) {
+        ids.push(child.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [siblings, getChildren, data.persons]);
+
+  // Sepupu 1 kali (1st Cousins) — children of uncles/aunts
+  const cousins1 = useMemo(() => {
+    const ids: string[] = [];
+    for (const ua of unclesAunts) {
+      for (const child of getChildren(ua.id)) {
+        if (child.id !== person.id) ids.push(child.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [unclesAunts, getChildren, person.id, data.persons]);
+
+  // Sepupu 2 kali (2nd Cousins) — children of parent's 1st cousins
+  const cousins2 = useMemo(() => {
+    // Get parent's cousins (parent's parent's siblings' children)
+    const parentCousins = new Set<string>();
+    for (const parent of parents) {
+      const grandparents = getParents(parent.id);
+      for (const gp of grandparents) {
+        const gpSiblings = getSiblings(gp.id);
+        for (const gpSib of gpSiblings) {
+          for (const cousin of getChildren(gpSib.id)) {
+            if (cousin.id !== parent.id) parentCousins.add(cousin.id);
+          }
+        }
+      }
+    }
+    // Children of parent's cousins
+    const ids: string[] = [];
+    for (const pcId of parentCousins) {
+      for (const child of getChildren(pcId)) {
+        if (child.id !== person.id) ids.push(child.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [parents, getParents, getSiblings, getChildren, person.id, data.persons]);
+
+  // Sepupu 3 kali (3rd Cousins) — children of parent's 2nd cousins
+  const cousins3 = useMemo(() => {
+    // Get grandparent's cousins
+    const gpCousins = new Set<string>();
+    for (const parent of parents) {
+      const grandparents = getParents(parent.id);
+      for (const gp of grandparents) {
+        const greatGPs = getParents(gp.id);
+        for (const ggp of greatGPs) {
+          const ggpSiblings = getSiblings(ggp.id);
+          for (const ggpSib of ggpSiblings) {
+            for (const gpCousin of getChildren(ggpSib.id)) {
+              if (gpCousin.id !== gp.id) gpCousins.add(gpCousin.id);
+            }
+          }
+        }
+      }
+    }
+    // GP cousin's grandchildren
+    const parentCousins2 = new Set<string>();
+    for (const gpcId of gpCousins) {
+      for (const child of getChildren(gpcId)) {
+        parentCousins2.add(child.id);
+      }
+    }
+    const ids: string[] = [];
+    for (const pc2Id of parentCousins2) {
+      for (const child of getChildren(pc2Id)) {
+        if (child.id !== person.id) ids.push(child.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [parents, getParents, getSiblings, getChildren, person.id, data.persons]);
+
+  // Ipar (In-laws) — spouse's siblings + siblings' spouses
+  const inLaws = useMemo(() => {
+    const ids: string[] = [];
+    // Spouse's siblings
+    for (const spouse of spouses) {
+      for (const sib of getSiblings(spouse.id)) {
+        if (sib.id !== person.id) ids.push(sib.id);
+      }
+    }
+    // Siblings' spouses
+    for (const sib of siblings) {
+      for (const spouse of getSpouses(sib.id)) {
+        if (spouse.id !== person.id) ids.push(spouse.id);
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [spouses, siblings, getSiblings, getSpouses, person.id, data.persons]);
+
+  // Datuk Saudara / Nenek Saudara (Great-uncles / Great-aunts) — siblings of grandparents
+  const greatUnclesAunts = useMemo(() => {
+    const ids: string[] = [];
+    for (const parent of parents) {
+      const grandparents = getParents(parent.id);
+      for (const gp of grandparents) {
+        for (const sib of getSiblings(gp.id)) {
+          ids.push(sib.id);
+        }
+      }
+    }
+    return getPersonsByIds(ids);
+  }, [parents, getParents, getSiblings, data.persons]);
+
   const navigateToPerson = (personId: string) => {
     router.push({ pathname: "/member-profile" as any, params: { id: personId } });
   };
@@ -121,7 +251,7 @@ export default function MemberProfileScreen() {
         : `Are you sure you want to remove ${getDisplayName(person)} from the family tree?`,
       [
         { text: t("cancel"), style: "cancel" },
-        { text: t("delete"), style: "destructive", onPress: () => { deletePerson(person.id); router.back(); } },
+        { text: t("delete"), style: "destructive", onPress: () => { router.back(); setTimeout(() => deletePerson(person.id), 300); } },
       ]
     );
   };
@@ -137,6 +267,13 @@ export default function MemberProfileScreen() {
     { key: "grandchildren", label: lang === "bm" ? "Cucu" : "Grandchild", count: grandchildren.length },
     { key: "great-grandchildren", label: lang === "bm" ? "Cicit" : "Great-grandchild", count: greatGrandchildren.length },
     { key: "siblings", label: lang === "bm" ? "Adik-Beradik" : "Siblings", count: siblings.length },
+    { key: "uncle-aunt", label: lang === "bm" ? "Pakcik/Makcik" : "Uncle/Aunt", count: unclesAunts.length },
+    { key: "nephew-niece", label: lang === "bm" ? "Anak Buah" : "Nephew/Niece", count: nephewsNieces.length },
+    { key: "cousin1", label: lang === "bm" ? "Sepupu 1" : "1st Cousin", count: cousins1.length },
+    { key: "cousin2", label: lang === "bm" ? "Sepupu 2" : "2nd Cousin", count: cousins2.length },
+    { key: "cousin3", label: lang === "bm" ? "Sepupu 3" : "3rd Cousin", count: cousins3.length },
+    { key: "in-law", label: lang === "bm" ? "Ipar" : "In-Law", count: inLaws.length },
+    { key: "great-uncle-aunt", label: lang === "bm" ? "Datuk/Nenek Saudara" : "Great-Uncle/Aunt", count: greatUnclesAunts.length },
   ];
 
   const getTabContent = () => {
@@ -169,6 +306,20 @@ export default function MemberProfileScreen() {
         return renderPersonList(greatGrandchildren, lang === "bm" ? "Tiada cicit direkodkan" : "No great-grandchildren recorded");
       case "siblings":
         return renderPersonList(siblings, lang === "bm" ? "Tiada adik-beradik direkodkan" : "No siblings recorded");
+      case "uncle-aunt":
+        return renderPersonList(unclesAunts, lang === "bm" ? "Tiada pakcik/makcik direkodkan" : "No uncles/aunts found");
+      case "nephew-niece":
+        return renderPersonList(nephewsNieces, lang === "bm" ? "Tiada anak buah direkodkan" : "No nephews/nieces found");
+      case "cousin1":
+        return renderPersonList(cousins1, lang === "bm" ? "Tiada sepupu 1 kali direkodkan" : "No 1st cousins found");
+      case "cousin2":
+        return renderPersonList(cousins2, lang === "bm" ? "Tiada sepupu 2 kali direkodkan" : "No 2nd cousins found");
+      case "cousin3":
+        return renderPersonList(cousins3, lang === "bm" ? "Tiada sepupu 3 kali direkodkan" : "No 3rd cousins found");
+      case "in-law":
+        return renderPersonList(inLaws, lang === "bm" ? "Tiada ipar direkodkan" : "No in-laws found");
+      case "great-uncle-aunt":
+        return renderPersonList(greatUnclesAunts, lang === "bm" ? "Tiada datuk/nenek saudara direkodkan" : "No great-uncles/aunts found");
       default:
         return null;
     }
