@@ -141,7 +141,7 @@ export default function BackupRestoreScreen() {
       m.id, m.firstName, m.lastName || "", m.prefix || "", m.binBinti || "",
       m.gender, m.birthDate || "", m.birthPlace || "", m.deathDate || "",
       m.isAlive ? "Living" : "Deceased", m.race || "", m.religion || "",
-      m.photoUrl ? `photos/${m.id}.jpg` : "", m.bio || "",
+      m.photoUrl || "", m.bio || "",
     ]);
     return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
   };
@@ -277,17 +277,28 @@ export default function BackupRestoreScreen() {
     }
     setExporting(true);
     try {
+      // Build JSON backup (includes all data: members, marriages, parent-child, photos)
+      const backupData: FamilyData = {
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+      const jsonContent = JSON.stringify(backupData, null, 2);
+      const dateStr = new Date().toISOString().split("T")[0];
+      const fileName = `waris-backup-${dateStr}`;
+
       if (Platform.OS === "web") {
         // Web: download via browser
-        const membersCSV = buildMembersCSVString();
-        const blob = new Blob([membersCSV], { type: "text/csv" });
+        const blob = new Blob([jsonContent], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `waris-backup-${new Date().toISOString().split("T")[0]}.csv`;
+        a.download = `${fileName}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        Alert.alert(lang === "bm" ? "Berjaya" : "Success", lang === "bm" ? "Fail CSV dimuat turun." : "CSV file downloaded.");
+        Alert.alert(
+          lang === "bm" ? "Berjaya" : "Success",
+          lang === "bm" ? "Fail sandaran JSON dimuat turun." : "JSON backup file downloaded.",
+        );
       } else if (FileSystem) {
         // Native: Use SAF to let user choose save location first
         const { StorageAccessFramework } = FileSystem;
@@ -295,74 +306,39 @@ export default function BackupRestoreScreen() {
         // Step 1: Ask user to pick a folder
         const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (!permissions.granted) {
-          // User cancelled the folder picker
           setExporting(false);
           return;
         }
 
         const dirUri = permissions.directoryUri;
 
-        // Step 2: Generate CSV content
-        const membersCSV = buildMembersCSVString();
-        const marriagesCSV = buildMarriagesCSVString();
-        const parentChildCSV = buildParentChildCSVString();
-
-        // Step 3: Create and write each CSV file in the chosen directory
-        const dateStr = new Date().toISOString().split("T")[0];
-        let filesCreated = 0;
-
-        // Members CSV
-        const membersUri = await StorageAccessFramework.createFileAsync(
+        // Step 2: Save single JSON file (contains ALL data including relationships)
+        const fileUri = await StorageAccessFramework.createFileAsync(
           dirUri,
-          `waris-members-${dateStr}`,
-          "text/csv",
+          fileName,
+          "application/json",
         );
-        await FileSystem.writeAsStringAsync(membersUri, membersCSV, {
+        await FileSystem.writeAsStringAsync(fileUri, jsonContent, {
           encoding: FileSystem.EncodingType.UTF8,
         });
-        filesCreated++;
-
-        // Marriages CSV
-        if (data.marriages.length > 0) {
-          const marriagesUri = await StorageAccessFramework.createFileAsync(
-            dirUri,
-            `waris-marriages-${dateStr}`,
-            "text/csv",
-          );
-          await FileSystem.writeAsStringAsync(marriagesUri, marriagesCSV, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          filesCreated++;
-        }
-
-        // Parent-Child CSV
-        if (data.parentChildren.length > 0) {
-          const parentChildUri = await StorageAccessFramework.createFileAsync(
-            dirUri,
-            `waris-parent-child-${dateStr}`,
-            "text/csv",
-          );
-          await FileSystem.writeAsStringAsync(parentChildUri, parentChildCSV, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          filesCreated++;
-        }
 
         Alert.alert(
           lang === "bm" ? "Berjaya!" : "Success!",
           lang === "bm"
-            ? `${filesCreated} fail CSV berjaya disimpan ke lokasi yang dipilih.`
-            : `${filesCreated} CSV file(s) saved to the selected location.`,
+            ? `Sandaran disimpan sebagai ${fileName}.json\n\nFail ini mengandungi semua ${data.persons.length} ahli, ${data.marriages.length} perkahwinan dan ${data.parentChildren.length} hubungan.`
+            : `Backup saved as ${fileName}.json\n\nThis file contains all ${data.persons.length} members, ${data.marriages.length} marriages and ${data.parentChildren.length} relationships.`,
         );
       } else {
         // Fallback: save to app storage
-        const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
-        if (result.success) {
+        const baseDir = FileSystem?.documentDirectory;
+        if (baseDir) {
+          const filePath = `${baseDir}${fileName}.json`;
+          await FileSystem.writeAsStringAsync(filePath, jsonContent, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
           Alert.alert(
             lang === "bm" ? "Berjaya" : "Success",
-            lang === "bm"
-              ? "Fail CSV disimpan dalam storan aplikasi."
-              : "CSV files saved to app storage.",
+            lang === "bm" ? "Sandaran disimpan dalam storan aplikasi." : "Backup saved to app storage.",
           );
         }
       }
@@ -381,7 +357,7 @@ export default function BackupRestoreScreen() {
     setImporting(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "text/comma-separated-values", "application/json", "*/*"],
+        type: ["application/json", "text/csv", "text/comma-separated-values", "*/*"],
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -683,8 +659,8 @@ export default function BackupRestoreScreen() {
         </Text>
         <Text className="text-xs text-muted mb-4">
           {lang === "bm"
-            ? "Eksport mencipta fail CSV baru pada peranti anda. Import memulihkan dari fail CSV yang telah dieksport sebelumnya."
-            : "Export will create a new CSV file on your device. Import will restore from a previously exported CSV file."
+            ? "Eksport mencipta fail sandaran JSON pada peranti anda. Import memulihkan dari fail JSON atau CSV yang telah dieksport sebelumnya."
+            : "Export creates a single JSON backup file on your device. Import restores from a previously exported JSON or CSV file."
           }
         </Text>
 

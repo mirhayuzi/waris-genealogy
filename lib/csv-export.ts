@@ -87,7 +87,7 @@ function membersToCSV(members: Person[]): string {
     member.isAlive ? "Living" : "Deceased",
     member.race || "",
     member.religion || "",
-    member.photoUrl ? `photos/${member.id}.jpg` : "",
+    member.photoUrl || "",
     member.bio || "",
   ]);
 
