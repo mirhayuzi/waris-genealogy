@@ -93,3 +93,9 @@
 - [x] Improvement: Update photo upload to store in S3 and save URL in DB
 - [x] Improvement: Update CSV export to handle photo URLs instead of base64
 - [x] Improvement: Optimize family tree queries using database indexes
+
+
+## Critical Bugs (Phase 5)
+
+- [x] Bug: Photos uploaded cannot be restored after backup - CSV import doesn't handle photoUrl field (fixed: added photoUrl field support)
+- [x] Bug: After CSV restore, all family relationships are missing - marriages and parent-child links not imported (fixed: improved CSV file detection logic)

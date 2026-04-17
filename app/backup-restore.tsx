@@ -421,9 +421,9 @@ export default function BackupRestoreScreen() {
 
         const fileName = (asset.name || "").toLowerCase();
         const firstLine = content.split("\n")[0]?.toLowerCase() || "";
-        if (fileName.includes("marriage") || firstLine.includes("marriage id") || firstLine.includes("husband id")) {
+        if (firstLine.includes("marriage id") || firstLine.includes("husband id") || firstLine.includes("wife id") || fileName.includes("marriages")) {
           allMarriages = parseMarriagesCSV(content);
-        } else if (fileName.includes("parent") || firstLine.includes("relationship id") || firstLine.includes("parent id")) {
+        } else if (firstLine.includes("relationship id") || firstLine.includes("parent id") || firstLine.includes("child id") || fileName.includes("parent-child")) {
           allParentChildren = parseParentChildCSV(content);
         } else {
           allPersons = parseMembersCSV(content);
