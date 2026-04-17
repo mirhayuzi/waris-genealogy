@@ -174,8 +174,8 @@ function PersonPickerModal({ visible, onClose, persons, selectedId, onSelect, ti
                         className="flex-row items-center px-5 py-3 gap-3 border-b border-border"
                         style={isSelected ? { backgroundColor: accentColor + "10" } : undefined}
                       >
-                        {item.photo ? (
-                          <Image source={{ uri: item.photo }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
+                        {item.photoUrl ? (
+                          <Image source={{ uri: item.photoUrl }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
                         ) : (
                           <View
                             className="w-9 h-9 rounded-full items-center justify-center"
@@ -239,8 +239,8 @@ export default function MahramCheckerScreen() {
       >
         {person ? (
           <View className="flex-row items-center gap-3">
-            {person.photo ? (
-              <Image source={{ uri: person.photo }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
+            {person.photoUrl ? (
+              <Image source={{ uri: person.photoUrl }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
             ) : (
               <View
                 className="w-11 h-11 rounded-full items-center justify-center"

@@ -33,7 +33,7 @@ describe("CSV Export with SAF", () => {
     const headers = [
       "ID", "First Name", "Last Name", "Prefix/Title", "Bin/Binti",
       "Gender", "Date of Birth", "Place of Birth", "Date of Death",
-      "Status", "Ethnicity/Race", "Religion", "Photo File", "Biography",
+      "Status", "Ethnicity/Race", "Religion", "Photo URL", "Biography",
     ];
 
     const testPerson = {
@@ -49,7 +49,7 @@ describe("CSV Export with SAF", () => {
       isAlive: true,
       race: "Melayu",
       religion: "Islam",
-      photo: "data:image/jpeg;base64,abc123",
+      photoUrl: "file:///path/to/photo.jpg",
       bio: "A family elder",
     };
 
@@ -58,7 +58,7 @@ describe("CSV Export with SAF", () => {
       testPerson.prefix, testPerson.binBinti, testPerson.gender,
       testPerson.birthDate, testPerson.birthPlace, testPerson.deathDate,
       testPerson.isAlive ? "Living" : "Deceased", testPerson.race,
-      testPerson.religion, testPerson.photo ? `photos/${testPerson.id}.jpg` : "",
+      testPerson.religion, testPerson.photoUrl ? `photos/${testPerson.id}.jpg` : "",
       testPerson.bio,
     ];
 

@@ -14,10 +14,10 @@ function MemberAvatar({ person, size, colors }: {
   size: number;
   colors: ReturnType<typeof useColors>;
 }) {
-  if (person.photo) {
+  if (person.photoUrl) {
     return (
       <Image
-        source={{ uri: person.photo }}
+        source={{ uri: person.photoUrl }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         contentFit="cover"
       />

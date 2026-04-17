@@ -141,7 +141,7 @@ export default function BackupRestoreScreen() {
       m.id, m.firstName, m.lastName || "", m.prefix || "", m.binBinti || "",
       m.gender, m.birthDate || "", m.birthPlace || "", m.deathDate || "",
       m.isAlive ? "Living" : "Deceased", m.race || "", m.religion || "",
-      m.photo ? `photos/${m.id}.jpg` : "", m.bio || "",
+      m.photoUrl ? `photos/${m.id}.jpg` : "", m.bio || "",
     ]);
     return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
   };

@@ -70,7 +70,7 @@ function membersToCSV(members: Person[]): string {
     "Status",
     "Ethnicity/Race",
     "Religion",
-    "Photo File",
+    "Photo URL",
     "Biography",
   ];
 
@@ -87,7 +87,7 @@ function membersToCSV(members: Person[]): string {
     member.isAlive ? "Living" : "Deceased",
     member.race || "",
     member.religion || "",
-    member.photo ? `photos/${member.id}.jpg` : "",
+    member.photoUrl ? `photos/${member.id}.jpg` : "",
     member.bio || "",
   ]);
 
@@ -164,31 +164,49 @@ function parentChildToCSV(parentChildren: ParentChild[]): string {
 
 /**
  * Copy photos to export folder
+ * Handles both local file paths and S3 URLs
  */
 async function copyPhotosToExport(members: Person[], exportDir: string): Promise<number> {
   let photoCount = 0;
 
   for (const member of members) {
-    if (member.photo) {
+    if (member.photoUrl) {
       try {
         const photoFileName = `${member.id}.jpg`;
         const destPath = `${exportDir}/photos/${photoFileName}`;
 
-        // If photo is base64, write it as file
-        if (member.photo.startsWith("data:image")) {
-          const base64Data = member.photo.split(",")[1];
-          await FileSystem.writeAsStringAsync(destPath, base64Data, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-        } else if (member.photo.startsWith("file://") || member.photo.startsWith("/")) {
-          // If photo is a file path, copy it
+        // If photoUrl is a local file path, copy it
+        if (member.photoUrl.startsWith("file://") || member.photoUrl.startsWith("/")) {
           await FileSystem.copyAsync({
-            from: member.photo,
+            from: member.photoUrl,
             to: destPath,
           });
+          photoCount++;
         }
+        // If photoUrl is an S3 URL or HTTP URL, download and save
+        else if (member.photoUrl.startsWith("http")) {
+          try {
+            const response = await fetch(member.photoUrl);
+            const blob = await response.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result as string;
+                const base64String = result.split(",")[1];
+                resolve(base64String);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
 
-        photoCount++;
+            await FileSystem.writeAsStringAsync(destPath, base64, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            photoCount++;
+          } catch (fetchError) {
+            console.warn(`Failed to download photo from ${member.photoUrl}:`, fetchError);
+          }
+        }
       } catch (error) {
         console.warn(`Failed to copy photo for ${member.firstName}:`, error);
       }

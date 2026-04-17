@@ -52,9 +52,9 @@ describe("Person with Photo field", () => {
       isAlive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      photo: "file:///path/to/photo.jpg",
+      photoUrl: "file:///path/to/photo.jpg",
     };
-    expect(person.photo).toBe("file:///path/to/photo.jpg");
+    expect(person.photoUrl).toBe("file:///path/to/photo.jpg");
   });
 
   it("should allow photo to be undefined", () => {
@@ -68,7 +68,7 @@ describe("Person with Photo field", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    expect(person.photo).toBeUndefined();
+    expect(person.photoUrl).toBeUndefined();
   });
 });
 

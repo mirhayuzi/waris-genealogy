@@ -31,7 +31,7 @@ export default function EditMemberScreen() {
   const [race, setRace] = useState(person?.race || "");
   const [religion, setReligion] = useState<Religion>(person?.religion || "Islam");
   const [bio, setBio] = useState(person?.bio || "");
-  const [photo, setPhoto] = useState<string | undefined>(person?.photo);
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(person?.photoUrl);
 
   // Build existing relationship links from data
   const existingLinks = useMemo(() => {
@@ -91,7 +91,7 @@ export default function EditMemberScreen() {
       race: race || undefined,
       religion,
       bio: bio.trim() || undefined,
-      photo: photo || undefined,
+      photoUrl: photoUrl || undefined,
       isAlive,
     });
 
@@ -164,7 +164,7 @@ export default function EditMemberScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Photo */}
-        <PhotoPicker photo={photo} onPhotoChange={setPhoto} />
+        <PhotoPicker photo={photoUrl} onPhotoChange={setPhotoUrl} />
 
         {/* Gender */}
         <FormLabel text="Gender" />

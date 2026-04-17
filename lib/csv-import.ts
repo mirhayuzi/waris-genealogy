@@ -94,7 +94,7 @@ export function parseMembersCSV(csvText: string): Person[] {
       isAlive: statusVal !== "deceased",
       race: get("ethnicity/race") || undefined,
       religion: (get("religion") || "Islam") as Religion,
-      photo: get("photo file") || undefined,
+      photoUrl: get("photo url") || undefined,
       bio: get("biography") || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

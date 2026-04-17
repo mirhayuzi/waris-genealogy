@@ -84,3 +84,12 @@
 - [x] Bug: Member picker list cannot scroll when too many members; add search button for spouse/child/parent selection
 - [x] Feature: Add extended family relationships to member profile - sepupu 1 kali, sepupu 2 kali, sepupu 3 kali, anak buah, pakcik, makcik, ipar, datuk saudara, nenek saudara
 - [x] Feature: Add search members functionality to Mahram checker (both member selectors)
+
+
+## Design Principle Improvements (Phase 4)
+
+- [x] Improvement: Move photos from base64 in DB to file storage (S3/local) with photoUrl field
+- [x] Improvement: Add database indexes on fromId, toId, husbandId, wifeId for faster queries
+- [x] Improvement: Update photo upload to store in S3 and save URL in DB
+- [x] Improvement: Update CSV export to handle photo URLs instead of base64
+- [x] Improvement: Optimize family tree queries using database indexes

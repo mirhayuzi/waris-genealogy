@@ -90,9 +90,9 @@ function PersonCard({ person, isRoot, onPress, onAddChild, colors, scale }: {
           ]}
         >
           {/* Photo / Avatar */}
-          {person.photo ? (
+          {person.photoUrl ? (
             <Image
-              source={{ uri: person.photo }}
+              source={{ uri: person.photoUrl }}
               style={{
                 width: avatarSize,
                 height: avatarSize,
@@ -371,8 +371,8 @@ export default function TreeScreen() {
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
               <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
-                {person.photo ? (
-                  <Image source={{ uri: person.photo }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+                {person.photoUrl ? (
+                  <Image source={{ uri: person.photoUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
                 ) : (
                   <View
                     className="w-10 h-10 rounded-full items-center justify-center"

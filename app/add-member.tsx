@@ -57,7 +57,7 @@ export default function AddMemberScreen() {
       race: race || undefined,
       religion,
       icNumber: undefined,
-      photo: photo || undefined,
+      photoUrl: photo || undefined,
       bio: bio.trim() || undefined,
       isAlive,
     });

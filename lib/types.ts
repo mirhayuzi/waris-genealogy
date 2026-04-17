@@ -32,7 +32,7 @@ export interface Person {
   race?: string;
   religion: Religion;
   icNumber?: string;
-  photo?: string;
+  photoUrl?: string;  // File URL instead of base64 (e.g., "/images/{personId}.jpg" or S3 URL)
   bio?: string;
   isAlive: boolean;
   createdAt: string;

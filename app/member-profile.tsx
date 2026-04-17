@@ -29,8 +29,8 @@ function PersonListItem({ person, onPress, colors }: {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
       <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
-        {person.photo ? (
-          <Image source={{ uri: person.photo }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+        {person.photoUrl ? (
+          <Image source={{ uri: person.photoUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
         ) : (
           <View
             className="w-10 h-10 rounded-full items-center justify-center"
@@ -373,9 +373,9 @@ export default function MemberProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
         {/* Profile Header */}
         <View className="items-center mb-4">
-          {person.photo ? (
+          {person.photoUrl ? (
             <View style={{ width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: person.isAlive ? colors.primary : colors.muted, overflow: "hidden", marginBottom: 12 }}>
-              <Image source={{ uri: person.photo }} style={{ width: 90, height: 90, borderRadius: 45 }} contentFit="cover" />
+              <Image source={{ uri: person.photoUrl }} style={{ width: 90, height: 90, borderRadius: 45 }} contentFit="cover" />
             </View>
           ) : (
             <View
