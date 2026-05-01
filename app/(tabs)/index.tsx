@@ -8,34 +8,7 @@ import { useColors } from "@/hooks/use-colors";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
-
-function MemberAvatar({ person, size, colors }: {
-  person: Person;
-  size: number;
-  colors: ReturnType<typeof useColors>;
-}) {
-  if (person.photo) {
-    return (
-      <Image
-        source={{ uri: person.photo }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="cover"
-      />
-    );
-  }
-  const bgColor = person.isAlive ? colors.primary + "20" : colors.muted + "20";
-  const textColor = person.isAlive ? colors.primary : colors.muted;
-  return (
-    <View
-      className="items-center justify-center"
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor }}
-    >
-      <Text className="font-bold" style={{ color: textColor, fontSize: size * 0.4 }}>
-        {person.firstName.charAt(0).toUpperCase()}
-      </Text>
-    </View>
-  );
-}
+import { MemberAvatar } from "@/components/member-avatar";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -116,7 +89,7 @@ export default function HomeScreen() {
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
                 <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
-                  <MemberAvatar person={person} size={40} colors={colors} />
+                  <MemberAvatar person={person} size={40} />
                   <View className="flex-1">
                     <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
                     <Text className="text-xs text-muted">
@@ -248,7 +221,7 @@ export default function HomeScreen() {
                       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
                     >
                       <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3">
-                        <MemberAvatar person={person} size={40} colors={colors} />
+                        <MemberAvatar person={person} size={40} />
                         <View className="flex-1">
                           <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
                           <Text className="text-xs text-muted">

@@ -1,3 +1,14 @@
+/**
+ * Root Layout — updated with migration gate
+ *
+ * Lokasi: app/_layout.tsx (ganti yang sedia ada)
+ *
+ * Perbezaan dari versi lama:
+ *  1. Import FamilyProvider masih sama path "@/lib/family-store"
+ *     (kita ganti fail itu sendiri, bukan buat fail baru)
+ *  2. Tambah FamilyMigrationGate untuk tunjuk splash semasa migrasi
+ */
+
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
@@ -18,7 +29,8 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
-import { FamilyProvider } from "@/lib/family-store";
+import { FamilyProvider, useFamily } from "@/lib/family-store";
+import { MigrationSplash } from "@/components/migration-splash";
 import { I18nProvider } from "@/lib/i18n";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -28,6 +40,18 @@ export const unstable_settings = {
   anchor: "(tabs)",
 };
 
+/**
+ * Gate yang tunggu migrasi selesai sebelum render tree utama.
+ * Kalau tiada migrasi (user baru atau dah migrate), pass-through serta-merta.
+ */
+function FamilyMigrationGate({ children }: { children: React.ReactNode }) {
+  const { isMigrating } = useFamily();
+  if (isMigrating) {
+    return <MigrationSplash message="Memindahkan data keluarga..." />;
+  }
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
   const initialFrame = initialWindowMetrics?.frame ?? DEFAULT_WEB_FRAME;
@@ -35,7 +59,6 @@ export default function RootLayout() {
   const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
   const [frame, setFrame] = useState<Rect>(initialFrame);
 
-  // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {
     initManusRuntime();
   }, []);
@@ -51,23 +74,19 @@ export default function RootLayout() {
     return () => unsubscribe();
   }, [handleSafeAreaUpdate]);
 
-  // Create clients once and reuse them
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Disable automatic refetching on window focus for mobile
             refetchOnWindowFocus: false,
-            // Retry failed requests once
             retry: 1,
           },
         },
-      }),
+      })
   );
   const [trpcClient] = useState(() => createTRPCClient());
 
-  // Ensure minimum 8px padding for top and bottom on mobile
   const providerInitialMetrics = useMemo(() => {
     const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
     return {
@@ -83,29 +102,28 @@ export default function RootLayout() {
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <I18nProvider>
-      <FamilyProvider>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
-          {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
-          {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="add-member" options={{ presentation: "modal" }} />
-            <Stack.Screen name="edit-member" options={{ presentation: "modal" }} />
-            <Stack.Screen name="member-profile" />
-            <Stack.Screen name="faraid-calculator" />
-            <Stack.Screen name="mahram-checker" />
-            <Stack.Screen name="invite-family" options={{ presentation: "modal" }} />
-            <Stack.Screen name="family-timeline" />
-            <Stack.Screen name="miller-columns" />
-            <Stack.Screen name="backup-restore" />
-            <Stack.Screen name="oauth/callback" />
-          </Stack>
-          <StatusBar style="auto" />
-        </QueryClientProvider>
-      </trpc.Provider>
-      </FamilyProvider>
+        <FamilyProvider>
+          <FamilyMigrationGate>
+            <trpc.Provider client={trpcClient} queryClient={queryClient}>
+              <QueryClientProvider client={queryClient}>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="add-member" options={{ presentation: "modal" }} />
+                  <Stack.Screen name="edit-member" options={{ presentation: "modal" }} />
+                  <Stack.Screen name="member-profile" />
+                  <Stack.Screen name="faraid-calculator" />
+                  <Stack.Screen name="mahram-checker" />
+                  <Stack.Screen name="invite-family" options={{ presentation: "modal" }} />
+                  <Stack.Screen name="family-timeline" />
+                  <Stack.Screen name="miller-columns" />
+                  <Stack.Screen name="backup-restore" />
+                  <Stack.Screen name="oauth/callback" />
+                </Stack>
+                <StatusBar style="auto" />
+              </QueryClientProvider>
+            </trpc.Provider>
+          </FamilyMigrationGate>
+        </FamilyProvider>
       </I18nProvider>
     </GestureHandlerRootView>
   );

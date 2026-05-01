@@ -96,6 +96,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-font",
+    "expo-sqlite",  
     "@react-native-google-signin/google-signin",
     [
       "expo-audio",
@@ -140,6 +141,11 @@ const config: ExpoConfig = {
       },
     ],
   ],
+  extra: {
+    eas: {
+      projectId: "1814a92c-b7a3-413e-b776-b7de6a48720c",
+    },
+  },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,

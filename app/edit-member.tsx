@@ -5,6 +5,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { useState, useMemo } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Gender, Religion, PREFIXES, ETHNICITIES, getDisplayName } from "@/lib/types";
 import {
   FormLabel, FormInput, ChipSelector,
@@ -15,6 +16,7 @@ export default function EditMemberScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
+  const { t } = useI18n();
   const { getPersonById, updatePerson, data, addParentChild, addMarriage, deleteParentChild, deleteMarriage } = useFamily();
 
   const person = getPersonById(id || "");
@@ -64,9 +66,9 @@ export default function EditMemberScreen() {
   if (!person) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <Text className="text-foreground">Person not found</Text>
+        <Text className="text-foreground">{t("personNotFound")}</Text>
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
-          <Text className="text-primary mt-4">Go Back</Text>
+          <Text className="text-primary mt-4">{t("back")}</Text>
         </Pressable>
       </ScreenContainer>
     );
@@ -74,7 +76,7 @@ export default function EditMemberScreen() {
 
   const handleSave = () => {
     if (!firstName.trim()) {
-      Alert.alert("Required", "Please enter the first name.");
+      Alert.alert(t("required"), t("firstNameRequired"));
       return;
     }
 
@@ -151,13 +153,13 @@ export default function EditMemberScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="flex-row items-center gap-1">
             <IconSymbol name="xmark" size={20} color={colors.foreground} />
-            <Text className="text-sm text-foreground">Cancel</Text>
+            <Text className="text-sm text-foreground">{t("cancel")}</Text>
           </View>
         </Pressable>
-        <Text className="text-lg font-semibold text-foreground">Edit Member</Text>
+        <Text className="text-lg font-semibold text-foreground">{t("editMember")}</Text>
         <Pressable onPress={handleSave} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="bg-primary rounded-lg px-4 py-1.5">
-            <Text className="text-white text-sm font-semibold">Save</Text>
+            <Text className="text-white text-sm font-semibold">{t("save")}</Text>
           </View>
         </Pressable>
       </View>
@@ -167,7 +169,7 @@ export default function EditMemberScreen() {
         <PhotoPicker photo={photo} onPhotoChange={setPhoto} />
 
         {/* Gender */}
-        <FormLabel text="Gender" />
+        <FormLabel text={t("gender")} />
         <View className="flex-row gap-3 mb-4">
           {(["male", "female"] as Gender[]).map((g) => (
             <Pressable key={g} onPress={() => setGender(g)} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}>
@@ -179,7 +181,7 @@ export default function EditMemberScreen() {
                 }}
               >
                 <Text className="text-sm font-medium" style={{ color: gender === g ? "#fff" : colors.foreground }}>
-                  {g === "male" ? "Male (Lelaki)" : "Female (Perempuan)"}
+                  {g === "male" ? t("male") : t("female")}
                 </Text>
               </View>
             </Pressable>
@@ -188,31 +190,31 @@ export default function EditMemberScreen() {
 
         {/* Prefix - Dropdown */}
         <DropdownSelector
-          label="Prefix / Title (Optional)"
+          label={t("prefixTitle")}
           options={PREFIXES}
           selected={prefix}
           onSelect={setPrefix}
-          placeholder="Select prefix..."
+          placeholder={t("selectPrefix")}
         />
 
         {/* Name */}
-        <FormLabel text="First Name *" />
-        <FormInput value={firstName} onChangeText={setFirstName} placeholder="e.g. Ahmad, Siti" />
+        <FormLabel text={t("firstName")} />
+        <FormInput value={firstName} onChangeText={setFirstName} placeholder={t("firstNamePlaceholder")} />
 
-        <FormLabel text={`${gender === "male" ? "Bin" : "Binti"} (Father's Name)`} />
-        <FormInput value={binBinti} onChangeText={setBinBinti} placeholder="e.g. Yusof" />
+        <FormLabel text={`${gender === "male" ? t("bin") : t("binti")} ${t("fatherName")}`} />
+        <FormInput value={binBinti} onChangeText={setBinBinti} placeholder={t("fatherNamePlaceholder")} />
 
-        <FormLabel text="Last Name / Clan Name (Optional)" />
-        <FormInput value={lastName} onChangeText={setLastName} placeholder="e.g. Al-Attas" />
+        <FormLabel text={t("lastName")} />
+        <FormInput value={lastName} onChangeText={setLastName} placeholder={t("lastNamePlaceholder")} />
 
         {/* Dates - Calendar Picker */}
-        <DatePickerField label="Date of Birth" value={birthDate} onChange={setBirthDate} />
+        <DatePickerField label={t("dateOfBirth")} value={birthDate} onChange={setBirthDate} />
 
-        <FormLabel text="Place of Birth" />
-        <FormInput value={birthPlace} onChangeText={setBirthPlace} placeholder="e.g. Kota Bharu" />
+        <FormLabel text={t("placeOfBirth")} />
+        <FormInput value={birthPlace} onChangeText={setBirthPlace} placeholder={t("placeOfBirthPlaceholder")} />
 
         {/* Alive/Deceased */}
-        <FormLabel text="Status" />
+        <FormLabel text={t("status")} />
         <View className="flex-row gap-3 mb-4">
           {[true, false].map((alive) => (
             <Pressable key={String(alive)} onPress={() => setIsAlive(alive)} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}>
@@ -224,7 +226,7 @@ export default function EditMemberScreen() {
                 }}
               >
                 <Text className="text-sm font-medium" style={{ color: isAlive === alive ? "#fff" : colors.foreground }}>
-                  {alive ? "Living (Hidup)" : "Deceased (Meninggal)"}
+                  {alive ? t("livingStatus") : t("deceasedStatus")}
                 </Text>
               </View>
             </Pressable>
@@ -232,19 +234,20 @@ export default function EditMemberScreen() {
         </View>
 
         {!isAlive && (
-          <DatePickerField label="Date of Death" value={deathDate} onChange={setDeathDate} />
+          <DatePickerField label={t("dateOfDeath")} value={deathDate} onChange={setDeathDate} />
         )}
 
         {/* Ethnicity */}
-        <FormLabel text="Ethnicity" />
-        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} />
+        <FormLabel text={t("ethnicity")} />
+        <ChipSelector options={ETHNICITIES} selected={race} onSelect={(v) => setRace(v === race ? "" : v)} t_key="ethnicity" />
 
         {/* Religion */}
-        <FormLabel text="Religion" />
+        <FormLabel text={t("religion")} />
         <ChipSelector
           options={["Islam", "Buddhism", "Hinduism", "Christianity", "Sikhism", "Others"] as const}
           selected={religion}
           onSelect={(v) => setReligion(v as Religion)}
+          t_key="religion"
         />
 
         {/* Relationship Links */}
@@ -256,8 +259,8 @@ export default function EditMemberScreen() {
         />
 
         {/* Bio */}
-        <FormLabel text="Notes / Biography (Optional)" />
-        <FormInput value={bio} onChangeText={setBio} placeholder="Short biography..." multiline />
+        <FormLabel text={t("notes")} />
+        <FormInput value={bio} onChangeText={setBio} placeholder={t("notesPlaceholder")} multiline />
       </ScrollView>
     </ScreenContainer>
   );

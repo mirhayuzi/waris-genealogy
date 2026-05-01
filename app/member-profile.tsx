@@ -8,6 +8,7 @@ import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { useState, useMemo } from "react";
+import { MemberAvatar } from "@/components/member-avatar";
 
 type TabKey = "details" | "spouse" | "parents" | "children" | "grandchildren" | "great-grandchildren" | "siblings";
 
@@ -26,25 +27,15 @@ function PersonListItem({ person, onPress, colors }: {
   onPress: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useI18n();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
       <View className="flex-row items-center bg-surface rounded-xl p-3 border border-border gap-3 mb-2">
-        {person.photo ? (
-          <Image source={{ uri: person.photo }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
-        ) : (
-          <View
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: (person.isAlive ? colors.primary : colors.muted) + "20" }}
-          >
-            <Text className="text-sm font-bold" style={{ color: person.isAlive ? colors.primary : colors.muted }}>
-              {person.firstName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <MemberAvatar person={person} size={40} />
         <View className="flex-1">
           <Text className="text-sm font-medium text-foreground">{getDisplayName(person)}</Text>
           <Text className="text-xs text-muted">
-            {person.isAlive ? "Living" : "Deceased"}
+            {person.isAlive ? t("living") : t("deceased")}
             {person.birthDate ? ` · b. ${person.birthDate}` : ""}
           </Text>
         </View>
@@ -115,7 +106,7 @@ export default function MemberProfileScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      lang === "bm" ? "Padam Ahli" : "Delete Member",
+      t("delete"),
       lang === "bm"
         ? `Adakah anda pasti mahu membuang ${getDisplayName(person)} dari salasilah keluarga?`
         : `Are you sure you want to remove ${getDisplayName(person)} from the family tree?`,
@@ -130,13 +121,13 @@ export default function MemberProfileScreen() {
 
   // Tab definitions with counts
   const tabs: { key: TabKey; label: string; count?: number }[] = [
-    { key: "details", label: lang === "bm" ? "Maklumat" : "Details" },
-    { key: "spouse", label: lang === "bm" ? "Pasangan" : "Spouse", count: spouses.length },
-    { key: "parents", label: lang === "bm" ? "Ibu Bapa" : "Parents", count: parents.length },
-    { key: "children", label: lang === "bm" ? "Anak" : "Children", count: children.length },
-    { key: "grandchildren", label: lang === "bm" ? "Cucu" : "Grandchild", count: grandchildren.length },
-    { key: "great-grandchildren", label: lang === "bm" ? "Cicit" : "Great-grandchild", count: greatGrandchildren.length },
-    { key: "siblings", label: lang === "bm" ? "Adik-Beradik" : "Siblings", count: siblings.length },
+    { key: "details", label: t("personalDetails") },
+    { key: "spouse", label: t("spousesLabel"), count: spouses.length },
+    { key: "parents", label: t("parentsLabel"), count: parents.length },
+    { key: "children", label: t("childrenLabel"), count: children.length },
+    { key: "grandchildren", label: t("grandchildren"), count: grandchildren.length },
+    { key: "great-grandchildren", label: t("greatGrandchildren"), count: greatGrandchildren.length },
+    { key: "siblings", label: t("siblingsLabel"), count: siblings.length },
   ];
 
   const getTabContent = () => {
@@ -144,17 +135,17 @@ export default function MemberProfileScreen() {
       case "details":
         return (
           <View className="bg-surface rounded-2xl px-4 border border-border">
-            <InfoRow label={lang === "bm" ? "Gelaran" : "Prefix"} value={person.prefix} />
-            <InfoRow label={lang === "bm" ? "Nama Pertama" : "First Name"} value={person.firstName} />
-            <InfoRow label={person.gender === "male" ? "Bin" : "Binti"} value={person.binBinti} />
-            <InfoRow label={lang === "bm" ? "Nama Akhir" : "Last Name"} value={person.lastName} />
-            <InfoRow label={lang === "bm" ? "Jantina" : "Gender"} value={person.gender === "male" ? (lang === "bm" ? "Lelaki" : "Male") : (lang === "bm" ? "Perempuan" : "Female")} />
-            <InfoRow label={lang === "bm" ? "Tarikh Lahir" : "Date of Birth"} value={person.birthDate} />
-            <InfoRow label={lang === "bm" ? "Tempat Lahir" : "Place of Birth"} value={person.birthPlace} />
-            {!person.isAlive && <InfoRow label={lang === "bm" ? "Tarikh Meninggal" : "Date of Death"} value={person.deathDate} />}
-            <InfoRow label={lang === "bm" ? "Etnik" : "Ethnicity"} value={person.race} />
-            <InfoRow label={lang === "bm" ? "Agama" : "Religion"} value={person.religion} />
-            {person.bio && <InfoRow label={lang === "bm" ? "Nota" : "Notes"} value={person.bio} />}
+            <InfoRow label={t("prefix")} value={person.prefix} />
+            <InfoRow label={t("firstName")} value={person.firstName} />
+            <InfoRow label={person.gender === "male" ? t("bin") : t("binti")} value={person.binBinti} />
+            <InfoRow label={t("lastName")} value={person.lastName} />
+            <InfoRow label={t("gender")} value={person.gender === "male" ? t("male") : t("female")} />
+            <InfoRow label={t("dateOfBirth")} value={person.birthDate} />
+            <InfoRow label={t("placeOfBirth")} value={person.birthPlace} />
+            {!person.isAlive && <InfoRow label={t("dateOfDeath")} value={person.deathDate} />}
+            <InfoRow label={t("ethnicity")} value={person.race} />
+            <InfoRow label={t("religion")} value={person.religion} />
+            {person.bio && <InfoRow label={t("notes")} value={person.bio} />}
           </View>
         );
       case "spouse":
@@ -246,7 +237,7 @@ export default function MemberProfileScreen() {
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: person.isAlive ? colors.success : colors.muted }}
             />
-            <Text className="text-sm text-muted">{person.isAlive ? (lang === "bm" ? "Hidup" : "Living") : (lang === "bm" ? "Meninggal" : "Deceased")}</Text>
+            <Text className="text-sm text-muted">{person.isAlive ? t("living") : t("deceased")}</Text>
             {isRoot && (
               <View className="bg-primary/15 rounded-full px-2 py-0.5">
                 <Text className="text-[10px] font-semibold" style={{ color: colors.primary }}>ROOT</Text>
@@ -259,25 +250,25 @@ export default function MemberProfileScreen() {
             {spouses.length > 0 && (
               <View className="items-center">
                 <Text className="text-lg font-bold text-foreground">{spouses.length}</Text>
-                <Text className="text-[10px] text-muted">{lang === "bm" ? "Pasangan" : "Spouse"}</Text>
+                <Text className="text-[10px] text-muted">{t("spouses")}</Text>
               </View>
             )}
             {children.length > 0 && (
               <View className="items-center">
                 <Text className="text-lg font-bold text-foreground">{children.length}</Text>
-                <Text className="text-[10px] text-muted">{lang === "bm" ? "Anak" : "Children"}</Text>
+                <Text className="text-[10px] text-muted">{t("children")}</Text>
               </View>
             )}
             {grandchildren.length > 0 && (
               <View className="items-center">
                 <Text className="text-lg font-bold text-foreground">{grandchildren.length}</Text>
-                <Text className="text-[10px] text-muted">{lang === "bm" ? "Cucu" : "Grandchild"}</Text>
+                <Text className="text-[10px] text-muted">{t("grandchild")}</Text>
               </View>
             )}
             {greatGrandchildren.length > 0 && (
               <View className="items-center">
                 <Text className="text-lg font-bold text-foreground">{greatGrandchildren.length}</Text>
-                <Text className="text-[10px] text-muted">{lang === "bm" ? "Cicit" : "Great-GC"}</Text>
+                <Text className="text-[10px] text-muted">{t("greatGrandchild")}</Text>
               </View>
             )}
           </View>

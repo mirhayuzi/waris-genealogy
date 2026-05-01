@@ -6,6 +6,7 @@ import { Gender, Religion, PREFIXES, ETHNICITIES, Person, getDisplayName } from 
 import { useState, useCallback } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import { useI18n } from "@/lib/i18n";
 
 // ---- Shared Form Components ----
 
@@ -36,29 +37,34 @@ export function FormInput({ value, onChangeText, placeholder, multiline, editabl
   );
 }
 
-export function ChipSelector({ options, selected, onSelect }: {
+export function ChipSelector({ options, selected, onSelect, t_key }: {
   options: readonly string[];
   selected: string;
   onSelect: (v: string) => void;
+  t_key?: string;
 }) {
   const colors = useColors();
+  const { t } = useI18n();
   return (
     <View className="flex-row flex-wrap gap-2 mb-4">
-      {options.map((opt) => (
-        <Pressable key={opt} onPress={() => onSelect(opt)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
-          <View
-            className="px-3 py-1.5 rounded-full border"
-            style={{
-              backgroundColor: selected === opt ? colors.primary : "transparent",
-              borderColor: selected === opt ? colors.primary : colors.border,
-            }}
-          >
-            <Text className="text-xs font-medium" style={{ color: selected === opt ? "#fff" : colors.foreground }}>
-              {opt}
-            </Text>
-          </View>
-        </Pressable>
-      ))}
+      {options.map((opt) => {
+        const displayLabel = t_key ? t(`${t_key}.${opt.toLowerCase()}` as any) : opt;
+        return (
+          <Pressable key={opt} onPress={() => onSelect(opt)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
+            <View
+              className="px-3 py-1.5 rounded-full border"
+              style={{
+                backgroundColor: selected === opt ? colors.primary : "transparent",
+                borderColor: selected === opt ? colors.primary : colors.border,
+              }}
+            >
+              <Text className="text-xs font-medium" style={{ color: selected === opt ? "#fff" : colors.foreground }}>
+                {displayLabel}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -73,6 +79,7 @@ export function DropdownSelector({ label, options, selected, onSelect, placehold
   placeholder: string;
 }) {
   const colors = useColors();
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -105,7 +112,7 @@ export function DropdownSelector({ label, options, selected, onSelect, placehold
                 style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
                 <View className="px-5 py-3 flex-row items-center justify-between border-b border-border">
-                  <Text className="text-sm text-muted italic">None</Text>
+                  <Text className="text-sm text-muted italic">{t("none")}</Text>
                   {!selected && <IconSymbol name="checkmark" size={16} color={colors.primary} />}
                 </View>
               </Pressable>
@@ -133,20 +140,19 @@ export function DropdownSelector({ label, options, selected, onSelect, placehold
   );
 }
 
-// ---- Date Picker ----
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 export function DatePickerField({ label, value, onChange }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   const colors = useColors();
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
+
+  const MONTHS = [
+    t("january"), t("february"), t("march"), t("april"), t("may"), t("june"),
+    t("july"), t("august"), t("september"), t("october"), t("november"), t("december"),
+  ];
 
   // Parse existing value
   const parsed = value ? parseDateString(value) : null;
@@ -179,7 +185,7 @@ export function DatePickerField({ label, value, onChange }: {
       <Pressable onPress={() => setVisible(true)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
         <View className="bg-surface border border-border rounded-xl px-4 py-3 mb-4 flex-row items-center justify-between">
           <Text className="text-sm" style={{ color: value ? colors.foreground : colors.muted }}>
-            {value || "Tap to select date"}
+            {value || t("tapToSelectDate")}
           </Text>
           <IconSymbol name="calendar" size={16} color={colors.muted} />
         </View>
@@ -201,7 +207,7 @@ export function DatePickerField({ label, value, onChange }: {
               <View className="flex-row px-5 gap-2 mb-4">
                 {/* Day */}
                 <View className="flex-1">
-                  <Text className="text-xs text-muted mb-1 text-center">Day</Text>
+                  <Text className="text-xs text-muted mb-1 text-center">{t("day")}</Text>
                   <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
                     {days.map((d) => (
                       <Pressable key={d} onPress={() => setSelDay(d)}>
@@ -220,7 +226,7 @@ export function DatePickerField({ label, value, onChange }: {
 
                 {/* Month */}
                 <View className="flex-[2]">
-                  <Text className="text-xs text-muted mb-1 text-center">Month</Text>
+                  <Text className="text-xs text-muted mb-1 text-center">{t("month")}</Text>
                   <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
                     {MONTHS.map((m, idx) => (
                       <Pressable key={m} onPress={() => setSelMonth(idx + 1)}>
@@ -239,7 +245,7 @@ export function DatePickerField({ label, value, onChange }: {
 
                 {/* Year */}
                 <View className="flex-1">
-                  <Text className="text-xs text-muted mb-1 text-center">Year</Text>
+                  <Text className="text-xs text-muted mb-1 text-center">{t("year")}</Text>
                   <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
                     {years.map((y) => (
                       <Pressable key={y} onPress={() => setSelYear(y)}>
@@ -261,12 +267,12 @@ export function DatePickerField({ label, value, onChange }: {
               <View className="flex-row px-5 gap-3">
                 <Pressable onPress={handleClear} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}>
                   <View className="py-3 rounded-xl border border-border items-center">
-                    <Text className="text-sm font-medium text-muted">Clear</Text>
+                    <Text className="text-sm font-medium text-muted">{t("clear")}</Text>
                   </View>
                 </Pressable>
                 <Pressable onPress={handleConfirm} style={({ pressed }) => [{ flex: 2, opacity: pressed ? 0.8 : 1 }]}>
                   <View className="py-3 rounded-xl bg-primary items-center">
-                    <Text className="text-sm font-semibold text-white">Confirm</Text>
+                    <Text className="text-sm font-semibold text-white">{t("confirm")}</Text>
                   </View>
                 </Pressable>
               </View>
@@ -318,6 +324,7 @@ export function PhotoPicker({ photo, onPhotoChange }: {
   onPhotoChange: (uri: string | undefined) => void;
 }) {
   const colors = useColors();
+  const { t } = useI18n();
   const [showOptions, setShowOptions] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -365,7 +372,7 @@ export function PhotoPicker({ photo, onPhotoChange }: {
 
   return (
     <>
-      <FormLabel text="Photo (Optional)" />
+      <FormLabel text={t("photo")} />
       <View className="items-center mb-4">
         <Pressable
           onPress={() => setShowOptions(true)}
@@ -401,11 +408,11 @@ export function PhotoPicker({ photo, onPhotoChange }: {
               }}
             >
               {loading ? (
-                <Text style={{ fontSize: 10, color: colors.muted }}>Loading...</Text>
+                <Text style={{ fontSize: 10, color: colors.muted }}>{t("loading")}</Text>
               ) : (
                 <>
                   <IconSymbol name="camera.fill" size={24} color={colors.primary} />
-                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>Add Photo</Text>
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>{t("addPhoto")}</Text>
                 </>
               )}
             </View>
@@ -423,7 +430,7 @@ export function PhotoPicker({ photo, onPhotoChange }: {
               <View className="items-center py-3">
                 <View className="w-10 h-1 rounded-full bg-border" />
               </View>
-              <Text className="text-base font-semibold text-foreground px-5 mb-3">Choose Photo</Text>
+              <Text className="text-base font-semibold text-foreground px-5 mb-3">{t("choosePhoto")}</Text>
 
               <Pressable onPress={pickFromDevice} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                 <View className="flex-row items-center px-5 py-3.5 gap-3">
@@ -431,8 +438,8 @@ export function PhotoPicker({ photo, onPhotoChange }: {
                     <IconSymbol name="photo.fill" size={20} color={colors.primary} />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-sm font-medium text-foreground">Choose from Device</Text>
-                    <Text className="text-xs text-muted">Select a photo from gallery, camera, or files</Text>
+                    <Text className="text-sm font-medium text-foreground">{t("chooseFromDevice")}</Text>
+                    <Text className="text-xs text-muted">{t("selectPhotoDesc")}</Text>
                   </View>
                 </View>
               </Pressable>
@@ -444,8 +451,8 @@ export function PhotoPicker({ photo, onPhotoChange }: {
                       <IconSymbol name="trash.fill" size={20} color={colors.error} />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-medium" style={{ color: colors.error }}>Remove Photo</Text>
-                      <Text className="text-xs text-muted">Delete the current photo</Text>
+                      <Text className="text-sm font-medium" style={{ color: colors.error }}>{t("removePhoto")}</Text>
+                      <Text className="text-xs text-muted">{t("deleteAllMembers")}</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -453,7 +460,7 @@ export function PhotoPicker({ photo, onPhotoChange }: {
 
               <Pressable onPress={() => setShowOptions(false)} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
                 <View className="mx-5 mt-3 py-3 rounded-xl border border-border items-center">
-                  <Text className="text-sm font-medium text-muted">Cancel</Text>
+                  <Text className="text-sm font-medium text-muted">{t("cancel")}</Text>
                 </View>
               </Pressable>
             </View>
@@ -473,6 +480,7 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
   onLinksChange: (links: { type: "spouse" | "parent" | "child"; personId: string }[]) => void;
 }) {
   const colors = useColors();
+  const { t } = useI18n();
   const [showPicker, setShowPicker] = useState(false);
   const [linkType, setLinkType] = useState<"spouse" | "parent" | "child">("spouse");
 
@@ -492,20 +500,20 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
 
   const getPersonName = (id: string) => {
     const p = persons.find((pp) => pp.id === id);
-    return p ? getDisplayName(p) : "Unknown";
+    return p ? getDisplayName(p) : t("none");
   };
 
-  const linkTypeLabel = (t: string) => {
-    switch (t) {
-      case "spouse": return "Spouse";
-      case "parent": return "Parent";
-      case "child": return "Child";
-      default: return t;
+  const linkTypeLabel = (t_key: string) => {
+    switch (t_key) {
+      case "spouse": return t("spouse");
+      case "parent": return t("parent");
+      case "child": return t("child");
+      default: return t_key;
     }
   };
 
-  const linkTypeColor = (t: string) => {
-    switch (t) {
+  const linkTypeColor = (t_key: string) => {
+    switch (t_key) {
       case "spouse": return colors.accent;
       case "parent": return colors.primary;
       case "child": return colors.success;
@@ -517,7 +525,7 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
 
   return (
     <>
-      <FormLabel text="Family Connections" />
+      <FormLabel text={t("familyConnections")} />
       <View className="bg-surface rounded-2xl border border-border p-3 mb-4">
         {/* Existing links */}
         {selectedLinks.map((link) => (
@@ -540,15 +548,15 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
 
         {/* Add link button */}
         <View className="flex-row gap-2 mt-2">
-          {(["spouse", "parent", "child"] as const).map((t) => (
+          {(["spouse", "parent", "child"] as const).map((t_key) => (
             <Pressable
-              key={t}
-              onPress={() => { setLinkType(t); setShowPicker(true); }}
+              key={t_key}
+              onPress={() => { setLinkType(t_key); setShowPicker(true); }}
               style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}
             >
-              <View className="py-2 rounded-lg border items-center" style={{ borderColor: linkTypeColor(t) + "40" }}>
-                <Text className="text-[10px] font-semibold" style={{ color: linkTypeColor(t) }}>
-                  + {linkTypeLabel(t)}
+              <View className="py-2 rounded-lg border items-center" style={{ borderColor: linkTypeColor(t_key) + "40" }}>
+                <Text className="text-[10px] font-semibold" style={{ color: linkTypeColor(t_key) }}>
+                  + {linkTypeLabel(t_key)}
                 </Text>
               </View>
             </Pressable>
@@ -568,15 +576,15 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
                 <View className="w-10 h-1 rounded-full bg-border" />
               </View>
               <Text className="text-base font-semibold text-foreground px-5 mb-1">
-                Select {linkTypeLabel(linkType)}
+                {t("select")} {linkTypeLabel(linkType)}
               </Text>
               <Text className="text-xs text-muted px-5 mb-3">
-                Choose a family member to link as {linkTypeLabel(linkType).toLowerCase()}
+                {t("chooseMemberToLink")} {linkTypeLabel(linkType).toLowerCase()}
               </Text>
 
               {availablePersons.length === 0 ? (
                 <View className="px-5 py-6 items-center">
-                  <Text className="text-sm text-muted">No available members to link.</Text>
+                  <Text className="text-sm text-muted">{t("noAvailableMembers")}</Text>
                 </View>
               ) : (
                 <FlatList
@@ -599,7 +607,7 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
                         <View className="flex-1">
                           <Text className="text-sm font-medium text-foreground">{getDisplayName(item)}</Text>
                           <Text className="text-xs text-muted">
-                            {item.gender === "male" ? "Male" : "Female"} · {item.religion}
+                            {item.gender === "male" ? t("male") : t("female")} · {item.religion}
                           </Text>
                         </View>
                       </View>

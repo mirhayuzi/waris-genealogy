@@ -4,6 +4,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
+import { useI18n } from "@/lib/i18n";
 import { UserRole } from "@/lib/types";
 import { useState } from "react";
 
@@ -16,37 +17,43 @@ export default function InviteFamilyScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data, addCollaborator, removeCollaborator } = useFamily();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<UserRole>("editor");
 
+  const ROLES: { value: UserRole; label: string; description: string }[] = [
+    { value: "editor", label: "Editor", description: t("recordNewPerson") },
+    { value: "viewer", label: "Viewer", description: t("shareViaEmail") },
+  ];
+
   const handleInvite = () => {
     if (!email.trim()) {
-      Alert.alert("Required", "Please enter an email address.");
+      Alert.alert(t("confirm"), t("emailAddress"));
       return;
     }
     if (!email.includes("@")) {
-      Alert.alert("Invalid", "Please enter a valid email address.");
+      Alert.alert(t("confirm"), t("emailAddress"));
       return;
     }
     const exists = data.collaborators.some((c) => c.email.toLowerCase() === email.trim().toLowerCase());
     if (exists) {
-      Alert.alert("Already Invited", "This email has already been invited.");
+      Alert.alert(t("alreadyInvited"), t("alreadyInvitedDesc"));
       return;
     }
 
     addCollaborator({ email: email.trim(), name: name.trim() || undefined, role });
     Alert.alert(
-      "Invitation Sent",
-      `An invitation has been sent to ${email.trim()} as ${role}.`,
+      t("invitationSent"),
+      t("invitationSentDesc").replace("{{email}}", email.trim()).replace("{{role}}", role),
       [{ text: "OK", onPress: () => { setEmail(""); setName(""); } }]
     );
   };
 
   const handleRemove = (id: string, emailAddr: string) => {
-    Alert.alert("Remove Collaborator", `Remove ${emailAddr} from your family tree?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => removeCollaborator(id) },
+    Alert.alert(t("removeCollaborator"), t("removeCollaboratorDesc").replace("{{email}}", emailAddr), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("delete"), style: "destructive", onPress: () => removeCollaborator(id) },
     ]);
   };
 
@@ -57,27 +64,26 @@ export default function InviteFamilyScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="flex-row items-center gap-1">
             <IconSymbol name="xmark" size={20} color={colors.foreground} />
-            <Text className="text-sm text-foreground">Close</Text>
+            <Text className="text-sm text-foreground">{t("cancel")}</Text>
           </View>
         </Pressable>
-        <Text className="text-lg font-semibold text-foreground">Invite Family</Text>
+        <Text className="text-lg font-semibold text-foreground">{t("inviteFamily")}</Text>
         <View className="w-12" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Info */}
         <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20 mb-6">
-          <Text className="text-sm font-medium text-foreground mb-1">Collaborate with Family</Text>
+          <Text className="text-sm font-medium text-foreground mb-1">{t("shareTreeWithRelatives")}</Text>
           <Text className="text-xs text-muted leading-relaxed">
-            Invite your siblings, cousins, or relatives by email. They can help build the family tree 
-            together. You can assign roles to control what they can do.
+            {t("recordNewPerson")}
           </Text>
         </View>
 
         {/* Invite Form */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">New Invitation</Text>
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("newInvitation")}</Text>
         <View className="bg-surface rounded-2xl p-4 border border-border mb-6">
-          <Text className="text-xs text-muted mb-1">Name (Optional)</Text>
+          <Text className="text-xs text-muted mb-1">{t("nameOptional")}</Text>
           <TextInput
             value={name}
             onChangeText={setName}
@@ -87,7 +93,7 @@ export default function InviteFamilyScreen() {
             style={{ color: colors.foreground }}
           />
 
-          <Text className="text-xs text-muted mb-1">Email Address *</Text>
+          <Text className="text-xs text-muted mb-1">{t("emailAddress")} *</Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -99,7 +105,7 @@ export default function InviteFamilyScreen() {
             style={{ color: colors.foreground }}
           />
 
-          <Text className="text-xs text-muted mb-2">Role</Text>
+          <Text className="text-xs text-muted mb-2">{t("role")}</Text>
           <View className="flex-row gap-2 mb-4">
             {ROLES.map((r) => (
               <Pressable key={r.value} onPress={() => setRole(r.value)} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}>
@@ -114,7 +120,7 @@ export default function InviteFamilyScreen() {
                     {r.label}
                   </Text>
                   <Text className="text-[10px] mt-0.5" style={{ color: role === r.value ? "rgba(255,255,255,0.7)" : colors.muted }}>
-                    {r.description}
+                    {r.description.slice(0, 20)}...
                   </Text>
                 </View>
               </Pressable>
@@ -124,20 +130,20 @@ export default function InviteFamilyScreen() {
           <Pressable onPress={handleInvite} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
             <View className="bg-primary rounded-xl py-3 items-center flex-row justify-center gap-2">
               <IconSymbol name="paperplane.fill" size={16} color="#fff" />
-              <Text className="text-white font-semibold text-sm">Send Invitation</Text>
+              <Text className="text-white font-semibold text-sm">{t("sendInvitation")}</Text>
             </View>
           </Pressable>
         </View>
 
         {/* Collaborators List */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-          Collaborators ({data.collaborators.length})
+          {t("collaborators")} ({data.collaborators.length})
         </Text>
         {data.collaborators.length === 0 ? (
           <View className="bg-surface rounded-2xl p-6 border border-border items-center">
             <IconSymbol name="person.2.fill" size={32} color={colors.muted} />
             <Text className="text-sm text-muted mt-2 text-center">
-              No collaborators yet. Invite your family members to start sharing your tree.
+              {t("noCollaborators")}
             </Text>
           </View>
         ) : (

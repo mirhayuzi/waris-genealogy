@@ -6,6 +6,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
+import { useI18n } from "@/lib/i18n";
 
 type MahramResult = {
   isMahram: boolean;
@@ -20,45 +21,46 @@ function checkMahram(
   getChildren: (id: string) => Person[],
   getSpouses: (id: string) => Person[],
   getSiblings: (id: string) => Person[],
+  t: (key: any) => string
 ): MahramResult {
   // Same gender - not applicable for Mahram in marriage context
   if (personA.gender === personB.gender) {
-    return { isMahram: true, relationship: "Same gender", ruling: "Same-gender relatives are always Mahram to each other." };
+    return { isMahram: true, relationship: t("sameGender"), ruling: t("sameGenderRuling") };
   }
 
   // Parent-child
   const parentsA = getParents(personA.id);
   if (parentsA.some((p) => p.id === personB.id)) {
-    return { isMahram: true, relationship: personB.gender === "male" ? "Father (Bapa)" : "Mother (Ibu)", ruling: "Parent and child are permanently Mahram (Nasab)." };
+    return { isMahram: true, relationship: personB.gender === "male" ? t("father") : t("mother"), ruling: t("parentChildRuling") };
   }
   const parentsB = getParents(personB.id);
   if (parentsB.some((p) => p.id === personA.id)) {
-    return { isMahram: true, relationship: personA.gender === "male" ? "Father (Bapa)" : "Mother (Ibu)", ruling: "Parent and child are permanently Mahram (Nasab)." };
+    return { isMahram: true, relationship: personA.gender === "male" ? t("father") : t("mother"), ruling: t("parentChildRuling") };
   }
 
   // Siblings
   const siblingsA = getSiblings(personA.id);
   if (siblingsA.some((s) => s.id === personB.id)) {
-    return { isMahram: true, relationship: "Sibling (Adik-Beradik)", ruling: "Siblings are permanently Mahram (Nasab)." };
+    return { isMahram: true, relationship: t("siblings"), ruling: t("siblingRuling") };
   }
 
   // Spouse
   const spousesA = getSpouses(personA.id);
   if (spousesA.some((s) => s.id === personB.id)) {
-    return { isMahram: true, relationship: "Spouse (Pasangan)", ruling: "Spouses are Mahram to each other through marriage (Musaharah)." };
+    return { isMahram: true, relationship: t("spouse"), ruling: t("spouseRuling") };
   }
 
   // Grandparent-grandchild
   for (const parent of parentsA) {
     const grandparents = getParents(parent.id);
     if (grandparents.some((gp) => gp.id === personB.id)) {
-      return { isMahram: true, relationship: "Grandparent (Datuk/Nenek)", ruling: "Grandparent and grandchild are permanently Mahram (Nasab)." };
+      return { isMahram: true, relationship: t("grandparent"), ruling: t("grandparentGrandchildRuling") };
     }
   }
   for (const parent of parentsB) {
     const grandparents = getParents(parent.id);
     if (grandparents.some((gp) => gp.id === personA.id)) {
-      return { isMahram: true, relationship: "Grandparent (Datuk/Nenek)", ruling: "Grandparent and grandchild are permanently Mahram (Nasab)." };
+      return { isMahram: true, relationship: t("grandparent"), ruling: t("grandparentGrandchildRuling") };
     }
   }
 
@@ -66,13 +68,13 @@ function checkMahram(
   for (const parent of parentsA) {
     const parentSiblings = getSiblings(parent.id);
     if (parentSiblings.some((ps) => ps.id === personB.id)) {
-      return { isMahram: true, relationship: personB.gender === "male" ? "Uncle (Pak Cik)" : "Aunt (Mak Cik)", ruling: "Uncle/Aunt and nephew/niece are permanently Mahram (Nasab)." };
+      return { isMahram: true, relationship: personB.gender === "male" ? t("uncle") : t("aunt"), ruling: t("uncleAuntRuling") };
     }
   }
   for (const parent of parentsB) {
     const parentSiblings = getSiblings(parent.id);
     if (parentSiblings.some((ps) => ps.id === personA.id)) {
-      return { isMahram: true, relationship: personA.gender === "male" ? "Uncle (Pak Cik)" : "Aunt (Mak Cik)", ruling: "Uncle/Aunt and nephew/niece are permanently Mahram (Nasab)." };
+      return { isMahram: true, relationship: personA.gender === "male" ? t("uncle") : t("aunt"), ruling: t("uncleAuntRuling") };
     }
   }
 
@@ -80,22 +82,23 @@ function checkMahram(
   for (const spouse of spousesA) {
     const spouseParents = getParents(spouse.id);
     if (spouseParents.some((sp) => sp.id === personB.id)) {
-      return { isMahram: true, relationship: "Parent-in-law (Mertua)", ruling: "Parent-in-law is Mahram through marriage (Musaharah)." };
+      return { isMahram: true, relationship: t("parentInLaw"), ruling: t("parentInLawRuling") };
     }
   }
   for (const spouse of getSpouses(personB.id)) {
     const spouseParents = getParents(spouse.id);
     if (spouseParents.some((sp) => sp.id === personA.id)) {
-      return { isMahram: true, relationship: "Parent-in-law (Mertua)", ruling: "Parent-in-law is Mahram through marriage (Musaharah)." };
+      return { isMahram: true, relationship: t("parentInLaw"), ruling: t("parentInLawRuling") };
     }
   }
 
-  return { isMahram: false, relationship: "Not Mahram", ruling: "No Mahram relationship found between these two people based on the family tree data. They are non-Mahram (Ajnabi)." };
+  return { isMahram: false, relationship: t("notMahram"), ruling: t("notMahramRuling") };
 }
 
 export default function MahramCheckerScreen() {
   const router = useRouter();
   const colors = useColors();
+  const { t } = useI18n();
   const { data, getParents, getChildren, getSpouses, getSiblings } = useFamily();
   const [personAId, setPersonAId] = useState<string | null>(null);
   const [personBId, setPersonBId] = useState<string | null>(null);
@@ -105,8 +108,8 @@ export default function MahramCheckerScreen() {
 
   const result = useMemo(() => {
     if (!personA || !personB || personA.id === personB.id) return null;
-    return checkMahram(personA, personB, getParents, getChildren, getSpouses, getSiblings);
-  }, [personAId, personBId, data]);
+    return checkMahram(personA, personB, getParents, getChildren, getSpouses, getSiblings, t);
+  }, [personAId, personBId, data, t]);
 
   const muslimPersons = data.persons.filter((p) => p.religion === "Islam");
 
@@ -116,24 +119,23 @@ export default function MahramCheckerScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="flex-row items-center gap-1">
             <IconSymbol name="chevron.left" size={20} color={colors.primary} />
-            <Text className="text-sm text-primary">Back</Text>
+            <Text className="text-sm text-primary">{t("back")}</Text>
           </View>
         </Pressable>
-        <Text className="text-lg font-semibold text-foreground">Mahram Checker</Text>
+        <Text className="text-lg font-semibold text-foreground">{t("mahramTitle")}</Text>
         <View className="w-12" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
         <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20 mb-6">
-          <Text className="text-sm font-medium text-foreground mb-1">Mahram Relationship Checker</Text>
+          <Text className="text-sm font-medium text-foreground mb-1">{t("mahramRelationship")}</Text>
           <Text className="text-xs text-muted leading-relaxed">
-            Select two Muslim family members to check if they are Mahram (unmarriageable kin) 
-            to each other based on Nasab (blood), Musaharah (marriage), or Radha'ah (breastfeeding).
+            {t("mahramDesc")}
           </Text>
         </View>
 
         {/* Person A Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Person 1</Text>
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("person1")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           <View className="flex-row gap-2">
             {muslimPersons.map((person) => (
@@ -162,7 +164,7 @@ export default function MahramCheckerScreen() {
         </ScrollView>
 
         {/* Person B Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Person 2</Text>
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("person2")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
           <View className="flex-row gap-2">
             {muslimPersons.filter((p) => p.id !== personAId).map((person) => (
@@ -211,21 +213,21 @@ export default function MahramCheckerScreen() {
                 />
               </View>
               <Text className="text-xl font-bold text-foreground">
-                {result.isMahram ? "MAHRAM" : "NOT MAHRAM"}
+                {result.isMahram ? t("mahram") : t("notMahram")}
               </Text>
             </View>
 
             <View className="bg-background/50 rounded-xl p-3 gap-2">
               <View className="flex-row justify-between">
-                <Text className="text-xs text-muted">Person 1</Text>
+                <Text className="text-xs text-muted">{t("person1")}</Text>
                 <Text className="text-xs font-medium text-foreground">{getDisplayName(personA)}</Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-xs text-muted">Person 2</Text>
+                <Text className="text-xs text-muted">{t("person2")}</Text>
                 <Text className="text-xs font-medium text-foreground">{getDisplayName(personB)}</Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-xs text-muted">Relationship</Text>
+                <Text className="text-xs text-muted">{t("relationship")}</Text>
                 <Text className="text-xs font-medium text-foreground">{result.relationship}</Text>
               </View>
             </View>
@@ -236,14 +238,14 @@ export default function MahramCheckerScreen() {
 
         {personAId && personBId && personAId === personBId && (
           <View className="bg-warning/10 rounded-2xl p-4 border border-warning/30">
-            <Text className="text-sm text-foreground text-center">Please select two different people.</Text>
+            <Text className="text-sm text-foreground text-center">{t("selectDifferentPeople")}</Text>
           </View>
         )}
 
         {muslimPersons.length < 2 && (
           <View className="bg-surface rounded-2xl p-6 border border-border items-center">
             <Text className="text-sm text-muted text-center">
-              You need at least 2 Muslim family members to use the Mahram Checker. Add more members first.
+              {t("needMoreMuslims")}
             </Text>
           </View>
         )}
