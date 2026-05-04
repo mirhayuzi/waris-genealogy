@@ -34,7 +34,7 @@ const BACKUP_WIFI_KEY = "@waris_wifi_only";
 export default function BackupRestoreScreen() {
   const router = useRouter();
   const colors = useColors();
-  const { data } = useFamily();
+  const { data, replaceAllFromBackup } = useFamily();
   const { t, lang } = useI18n();
 
   // Google Sign-In state
@@ -465,12 +465,12 @@ export default function BackupRestoreScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
+              await replaceAllFromBackup(parsed);
               Alert.alert(
                 lang === "bm" ? "Dipulihkan" : "Restored",
                 lang === "bm"
-                  ? `Berjaya memulihkan ${parsed.persons.length} ahli.\n\nSila mulakan semula aplikasi.`
-                  : `Successfully restored ${parsed.persons.length} members.\n\nPlease restart the app to see changes.`,
+                  ? `Berjaya memulihkan ${parsed.persons.length} ahli.`
+                  : `Successfully restored ${parsed.persons.length} members.`,
               );
             } catch {
               Alert.alert(lang === "bm" ? "Ralat" : "Error", lang === "bm" ? "Gagal memulihkan data." : "Failed to restore data.");

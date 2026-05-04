@@ -179,6 +179,7 @@ interface FamilyContextType {
   getSpouses: (personId: string) => Person[];
   getSiblings: (personId: string) => Person[];
   resetData: () => void;
+  replaceAllFromBackup: (data: FamilyData) => Promise<void>;
 }
 
 const FamilyContext = createContext<FamilyContextType | null>(null);
@@ -336,6 +337,11 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const replaceAllFromBackup = useCallback(async (backup: FamilyData): Promise<void> => {
+    await persistReplaceAll(backup);
+    dispatch({ type: "LOAD_DATA", payload: backup });
+  }, []);
+
   // ─── Query helpers (guna state in-memory untuk pantas) ──────────────────
 
   const getPersonById = useCallback(
@@ -413,6 +419,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
         getSpouses,
         getSiblings,
         resetData,
+        replaceAllFromBackup,
       }}
     >
       {children}
@@ -662,4 +669,107 @@ async function persistResetAll(): Promise<void> {
     await rawDb.execAsync("DELETE FROM collaborators;");
     await rawDb.execAsync("DELETE FROM family_meta;");
   });
+}
+
+async function persistReplaceAll(backup: FamilyData): Promise<void> {
+  const db = await getDatabase();
+  const rawDb = await getRawDatabase();
+
+  await rawDb.withTransactionAsync(async () => {
+    // Padam semua dalam dependency order
+    await rawDb.execAsync("DELETE FROM audit_log;");
+    await rawDb.execAsync("DELETE FROM events;");
+    await rawDb.execAsync("DELETE FROM person_closure;");
+    await rawDb.execAsync("DELETE FROM parent_child;");
+    await rawDb.execAsync("DELETE FROM marriages;");
+    await rawDb.execAsync("DELETE FROM persons;");
+    await rawDb.execAsync("DELETE FROM collaborators;");
+    await rawDb.execAsync("DELETE FROM family_meta;");
+
+    // Insert persons dalam batch (elak SQLite statement size limit)
+    if (backup.persons.length > 0) {
+      const BATCH = 50;
+      const personRows = backup.persons.map((p) => ({
+        id: p.id,
+        prefix: p.prefix ?? null,
+        firstName: p.firstName,
+        binBinti: p.binBinti ?? null,
+        lastName: p.lastName ?? null,
+        gender: p.gender,
+        birthDate: p.birthDate ?? null,
+        birthPlace: p.birthPlace ?? null,
+        deathDate: p.deathDate ?? null,
+        deathPlace: p.deathPlace ?? null,
+        isAlive: p.isAlive,
+        race: p.race ?? null,
+        religion: p.religion,
+        icNumber: p.icNumber ?? null,
+        photo: p.photo ?? null,
+        bio: p.bio ?? null,
+        soundexName: soundexMalay(p.firstName),
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      }));
+
+      for (let i = 0; i < personRows.length; i += BATCH) {
+        await db.insert(personsTable).values(personRows.slice(i, i + BATCH));
+      }
+    }
+
+    // Insert marriages
+    for (const m of backup.marriages) {
+      await db.insert(marriagesTable).values({
+        id: m.id,
+        husbandId: m.husbandId,
+        wifeId: m.wifeId,
+        wifeNumber: 1,
+        marriageDate: m.marriageDate ?? null,
+        marriagePlace: m.marriagePlace ?? null,
+        divorceDate: m.divorceDate ?? null,
+        isActive: m.isActive,
+        notes: m.notes ?? null,
+      });
+    }
+
+    // Insert parent-child relationships
+    for (const pc of backup.parentChildren) {
+      await db.insert(parentChildTable).values({
+        id: pc.id,
+        parentId: pc.parentId,
+        childId: pc.childId,
+        type: pc.type,
+      });
+    }
+
+    // Insert collaborators
+    for (const c of backup.collaborators) {
+      await db.insert(collaboratorsTable).values({
+        id: c.id,
+        email: c.email,
+        name: c.name ?? null,
+        role: c.role,
+        status: c.status,
+        invitedAt: c.invitedAt,
+      });
+    }
+
+    // Kemaskini family metadata
+    await rawDb.runAsync(
+      "INSERT OR REPLACE INTO family_meta (key, value) VALUES (?, ?)",
+      ["familyName", backup.familyName]
+    );
+    await rawDb.runAsync(
+      "INSERT OR REPLACE INTO family_meta (key, value) VALUES (?, ?)",
+      ["createdAt", backup.createdAt]
+    );
+    if (backup.rootPersonId) {
+      await rawDb.runAsync(
+        "INSERT OR REPLACE INTO family_meta (key, value) VALUES (?, ?)",
+        ["rootPersonId", backup.rootPersonId]
+      );
+    }
+  });
+
+  // rebuildClosure() ada withTransactionAsync sendiri — panggil selepas transaction utama
+  await rebuildClosure();
 }
