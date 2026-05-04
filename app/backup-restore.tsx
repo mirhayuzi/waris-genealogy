@@ -8,8 +8,9 @@ import { useI18n } from "@/lib/i18n";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FamilyData } from "@/lib/types";
-import { exportFamilyDataAsCSV } from "@/lib/csv-export";
 import { parseMembersCSV, parseMarriagesCSV, parseParentChildCSV, buildFamilyDataFromCSV } from "@/lib/csv-import";
+import { exportToZip, importFromZip } from "@/lib/zip-backup";
+import * as Updates from "expo-updates";
 import {
   GoogleUser,
   getStoredUser,
@@ -21,11 +22,11 @@ import {
 } from "@/lib/google-drive";
 
 // Lazy-load native modules
-let FileSystem: any = null;
-let DocumentPicker: any = null;
+import * as FileSystemModule from "expo-file-system/legacy";
+import * as DocumentPickerModule from "expo-document-picker";
 
-try { FileSystem = require("expo-file-system/legacy"); } catch {}
-try { DocumentPicker = require("expo-document-picker"); } catch {}
+const FileSystem = FileSystemModule;
+const DocumentPicker = DocumentPickerModule;
 
 const BACKUP_DATE_KEY = "@waris_last_backup";
 const BACKUP_AUTO_KEY = "@waris_auto_backup";
@@ -277,150 +278,115 @@ export default function BackupRestoreScreen() {
     }
     setExporting(true);
     try {
-      if (Platform.OS === "web") {
-        // Web: download via browser
-        const membersCSV = buildMembersCSVString();
-        const blob = new Blob([membersCSV], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `waris-backup-${new Date().toISOString().split("T")[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-        Alert.alert(lang === "bm" ? "Berjaya" : "Success", lang === "bm" ? "Fail CSV dimuat turun." : "CSV file downloaded.");
-      } else if (FileSystem) {
-        // Native: Use SAF to let user choose save location first
-        const { StorageAccessFramework } = FileSystem;
-
-        // Step 1: Ask user to pick a folder
-        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (!permissions.granted) {
-          // User cancelled the folder picker
-          setExporting(false);
-          return;
-        }
-
-        const dirUri = permissions.directoryUri;
-
-        // Step 2: Generate CSV content
-        const membersCSV = buildMembersCSVString();
-        const marriagesCSV = buildMarriagesCSVString();
-        const parentChildCSV = buildParentChildCSVString();
-
-        // Step 3: Create and write each CSV file in the chosen directory
-        const dateStr = new Date().toISOString().split("T")[0];
-        let filesCreated = 0;
-
-        // Members CSV
-        const membersUri = await StorageAccessFramework.createFileAsync(
-          dirUri,
-          `waris-members-${dateStr}`,
-          "text/csv",
-        );
-        await FileSystem.writeAsStringAsync(membersUri, membersCSV, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        filesCreated++;
-
-        // Marriages CSV
-        if (data.marriages.length > 0) {
-          const marriagesUri = await StorageAccessFramework.createFileAsync(
-            dirUri,
-            `waris-marriages-${dateStr}`,
-            "text/csv",
-          );
-          await FileSystem.writeAsStringAsync(marriagesUri, marriagesCSV, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          filesCreated++;
-        }
-
-        // Parent-Child CSV
-        if (data.parentChildren.length > 0) {
-          const parentChildUri = await StorageAccessFramework.createFileAsync(
-            dirUri,
-            `waris-parent-child-${dateStr}`,
-            "text/csv",
-          );
-          await FileSystem.writeAsStringAsync(parentChildUri, parentChildCSV, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          filesCreated++;
-        }
-
-        Alert.alert(
-          lang === "bm" ? "Berjaya!" : "Success!",
-          lang === "bm"
-            ? `${filesCreated} fail CSV berjaya disimpan ke lokasi yang dipilih.`
-            : `${filesCreated} CSV file(s) saved to the selected location.`,
-        );
-      } else {
-        // Fallback: save to app storage
-        const result = await exportFamilyDataAsCSV(data.persons, data.marriages, data.parentChildren);
-        if (result.success) {
-          Alert.alert(
-            lang === "bm" ? "Berjaya" : "Success",
-            lang === "bm"
-              ? "Fail CSV disimpan dalam storan aplikasi."
-              : "CSV files saved to app storage.",
-          );
-        }
+      // Build ZIP in cache directory
+      const zipResult = await exportToZip(data);
+      if (!zipResult.success) {
+        Alert.alert(lang === "bm" ? "Ralat" : "Error", zipResult.message);
+        return;
       }
-    } catch (e: any) {
-      Alert.alert(lang === "bm" ? "Ralat" : "Error", `Export failed: ${e?.message || "Unknown"}`);
+
+      if (Platform.OS === "web") {
+        Alert.alert(lang === "bm" ? "Tidak Tersedia" : "Not Available", "ZIP export not supported on web.");
+        return;
+      }
+
+      // Let user pick save folder via SAF
+      const { StorageAccessFramework } = FileSystem;
+      const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) return;
+
+      // Create ZIP file in chosen folder
+      const destUri = await StorageAccessFramework.createFileAsync(
+        permissions.directoryUri,
+        zipResult.fileName,
+        "application/zip",
+      );
+      const zipB64 = await FileSystem.readAsStringAsync(zipResult.tempPath, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      await FileSystem.writeAsStringAsync(destUri, zipB64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Clean up cache
+      await FileSystem.deleteAsync(zipResult.tempPath, { idempotent: true });
+
+      const now = new Date().toLocaleString("en-MY");
+      await AsyncStorage.setItem(BACKUP_DATE_KEY, now);
+      setLastBackup(now);
+
+      Alert.alert(
+        lang === "bm" ? "Berjaya!" : "Success!",
+        lang === "bm"
+          ? `${zipResult.fileName} disimpan. Termasuk ${data.persons.length} ahli dan gambar profil.`
+          : `${zipResult.fileName} saved. Includes ${data.persons.length} members and profile photos.`,
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert(lang === "bm" ? "Ralat" : "Error", `Export gagal: ${msg}`);
     } finally {
       setExporting(false);
     }
   };
 
   const handleImportLocal = async () => {
-    if (!DocumentPicker && Platform.OS !== "web") {
-      Alert.alert(lang === "bm" ? "Ralat" : "Error", lang === "bm" ? "Pemilih dokumen tidak tersedia." : "Document picker not available.");
-      return;
-    }
     setImporting(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "text/comma-separated-values", "application/json", "*/*"],
+        type: ["*/*"],
         copyToCacheDirectory: true,
         multiple: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
-        setImporting(false);
         return;
       }
 
-      let allPersons: any[] = [];
-      let allMarriages: any[] = [];
-      let allParentChildren: any[] = [];
-      let foundJSON = false;
+      const assets = result.assets;
 
-      for (const asset of result.assets) {
+      // Priority 1: ZIP file (new format)
+      const zipAsset = assets.find((a) => (a.name ?? "").toLowerCase().endsWith(".zip"));
+      if (zipAsset) {
+        const zipResult = await importFromZip(zipAsset.uri);
+        if (!zipResult.success || !zipResult.data) {
+          Alert.alert(lang === "bm" ? "Ralat" : "Error", zipResult.message);
+          return;
+        }
+        confirmRestore(zipResult.data);
+        return;
+      }
+
+      // Priority 2: Legacy JSON / CSV
+      let allPersons: ReturnType<typeof parseMembersCSV> = [];
+      let allMarriages: ReturnType<typeof parseMarriagesCSV> = [];
+      let allParentChildren: ReturnType<typeof parseParentChildCSV> = [];
+
+      for (const asset of assets) {
         let content: string;
         if (Platform.OS === "web" && asset.file) {
-          content = await asset.file.text();
-        } else if (FileSystem) {
-          content = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
+          content = await (asset.file as File).text();
         } else {
-          continue;
+          content = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
         }
 
         const trimmed = content.trim();
+        // Legacy JSON backup
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
           try {
             const parsed = JSON.parse(content) as FamilyData;
-            if (parsed.persons && Array.isArray(parsed.persons)) {
+            if (Array.isArray(parsed.persons)) {
               confirmRestore(parsed);
-              foundJSON = true;
-              break;
+              return;
             }
           } catch {}
           continue;
         }
 
-        const fileName = (asset.name || "").toLowerCase();
-        const firstLine = content.split("\n")[0]?.toLowerCase() || "";
+        // Legacy CSV — detect by filename or header
+        const fileName = (asset.name ?? "").toLowerCase();
+        const firstLine = content.split("\n")[0]?.toLowerCase() ?? "";
         if (fileName.includes("marriage") || firstLine.includes("marriage id") || firstLine.includes("husband id")) {
           allMarriages = parseMarriagesCSV(content);
         } else if (fileName.includes("parent") || firstLine.includes("relationship id") || firstLine.includes("parent id")) {
@@ -430,21 +396,19 @@ export default function BackupRestoreScreen() {
         }
       }
 
-      if (foundJSON) { setImporting(false); return; }
-
       if (allPersons.length === 0) {
         Alert.alert(
           lang === "bm" ? "Fail Tidak Sah" : "Invalid File",
-          lang === "bm" ? "Tiada data keluarga ditemui." : "No family data found in selected files.",
+          lang === "bm" ? "Tiada data keluarga ditemui dalam fail yang dipilih." : "No family data found in selected files.",
         );
-        setImporting(false);
         return;
       }
 
       const familyData = buildFamilyDataFromCSV(allPersons, allMarriages, allParentChildren, data.familyName, undefined);
       confirmRestore(familyData);
-    } catch (e: any) {
-      Alert.alert(lang === "bm" ? "Ralat" : "Error", `Import failed: ${e?.message || "Unknown"}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert(lang === "bm" ? "Ralat" : "Error", `Import gagal: ${msg}`);
     } finally {
       setImporting(false);
     }
@@ -466,12 +430,18 @@ export default function BackupRestoreScreen() {
           onPress: async () => {
             try {
               await replaceAllFromBackup(parsed);
-              Alert.alert(
-                lang === "bm" ? "Dipulihkan" : "Restored",
-                lang === "bm"
-                  ? `Berjaya memulihkan ${parsed.persons.length} ahli.`
-                  : `Successfully restored ${parsed.persons.length} members.`,
-              );
+              // Reload app so all screens reflect restored data cleanly
+              try {
+                await Updates.reloadAsync();
+              } catch {
+                // Development mode — reloadAsync not available, show manual restart prompt
+                Alert.alert(
+                  lang === "bm" ? "Dipulihkan" : "Restored",
+                  lang === "bm"
+                    ? `Berjaya memulihkan ${parsed.persons.length} ahli. Sila restart app.`
+                    : `Restored ${parsed.persons.length} members. Please restart the app.`,
+                );
+              }
             } catch {
               Alert.alert(lang === "bm" ? "Ralat" : "Error", lang === "bm" ? "Gagal memulihkan data." : "Failed to restore data.");
             }
@@ -679,12 +649,12 @@ export default function BackupRestoreScreen() {
 
         {/* ===== IMPORT/EXPORT SELECTIVELY ===== */}
         <Text className="text-xs font-bold text-muted uppercase tracking-widest mb-1">
-          {lang === "bm" ? "IMPORT/EKSPORT TERPILIH" : "IMPORT/EXPORT SELECTIVELY"}
+          {lang === "bm" ? "SANDARAN TEMPATAN (ZIP)" : "LOCAL BACKUP (ZIP)"}
         </Text>
         <Text className="text-xs text-muted mb-4">
           {lang === "bm"
-            ? "Eksport mencipta fail CSV baru pada peranti anda. Import memulihkan dari fail CSV yang telah dieksport sebelumnya."
-            : "Export will create a new CSV file on your device. Import will restore from a previously exported CSV file."
+            ? "Eksport mencipta 1 fail ZIP (data + gambar). Import menyokong ZIP baru, CSV lama, dan JSON lama."
+            : "Export creates 1 ZIP file (data + photos). Import supports new ZIP, legacy CSV, and legacy JSON."
           }
         </Text>
 
