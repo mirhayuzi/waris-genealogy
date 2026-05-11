@@ -111,9 +111,7 @@ export default function RootLayout() {
                   <Stack.Screen name="add-member" options={{ presentation: "modal" }} />
                   <Stack.Screen name="edit-member" options={{ presentation: "modal" }} />
                   <Stack.Screen name="member-profile" />
-                  <Stack.Screen name="faraid-calculator" />
-                  <Stack.Screen name="mahram-checker" />
-                  <Stack.Screen name="invite-family" options={{ presentation: "modal" }} />
+<Stack.Screen name="invite-family" options={{ presentation: "modal" }} />
                   <Stack.Screen name="family-timeline" />
                   <Stack.Screen name="miller-columns" />
                   <Stack.Screen name="backup-restore" />

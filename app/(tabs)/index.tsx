@@ -149,7 +149,7 @@ export default function HomeScreen() {
               {/* Row 1: Tree, Miller, Timeline */}
               <View className="flex-row gap-3">
                 <Pressable
-                  onPress={() => router.push("/(tabs)/tree")}
+                  onPress={() => router.push("/(tabs)/tree" as any)}
                   style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
                 >
                   <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">

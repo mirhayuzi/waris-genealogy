@@ -88,14 +88,14 @@ export default function ToolsScreen() {
             description={t("calcIslamicInheritance")}
             icon="chart.pie.fill"
             color={colors.primary}
-            onPress={() => router.push("/faraid-calculator" as any)}
+            onPress={() => router.push("./faraid-calculator" as any)}
           />
           <ToolCard
             title={t("mahramChecker")}
             description={t("checkMahramRelationships")}
             icon="person.2.fill"
             color={colors.accent}
-            onPress={() => router.push("/mahram-checker" as any)}
+            onPress={() => router.push("./mahram-checker" as any)}
           />
         </View>
 
@@ -173,8 +173,8 @@ export default function ToolsScreen() {
             <View className="flex-1">
               <Text className="text-sm font-medium text-foreground mb-1">About Faraid</Text>
               <Text className="text-xs text-muted leading-relaxed">
-                Faraid is the Islamic law of inheritance that determines how a deceased Muslim's estate 
-                is distributed among eligible heirs. The calculator uses your family tree data to 
+                Faraid is the Islamic law of inheritance that determines how a deceased Muslim's estate
+                is distributed among eligible heirs. The calculator uses your family tree data to
                 automatically identify heirs and compute their shares.
               </Text>
             </View>
