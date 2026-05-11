@@ -7,99 +7,13 @@ import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
-
-type MahramResult = {
-  isMahram: boolean;
-  relationship: string;
-  ruling: string;
-};
-
-function checkMahram(
-  personA: Person,
-  personB: Person,
-  getParents: (id: string) => Person[],
-  getChildren: (id: string) => Person[],
-  getSpouses: (id: string) => Person[],
-  getSiblings: (id: string) => Person[],
-  t: (key: any) => string
-): MahramResult {
-  // Same gender - not applicable for Mahram in marriage context
-  if (personA.gender === personB.gender) {
-    return { isMahram: true, relationship: t("sameGender"), ruling: t("sameGenderRuling") };
-  }
-
-  // Parent-child
-  const parentsA = getParents(personA.id);
-  if (parentsA.some((p) => p.id === personB.id)) {
-    return { isMahram: true, relationship: personB.gender === "male" ? t("father") : t("mother"), ruling: t("parentChildRuling") };
-  }
-  const parentsB = getParents(personB.id);
-  if (parentsB.some((p) => p.id === personA.id)) {
-    return { isMahram: true, relationship: personA.gender === "male" ? t("father") : t("mother"), ruling: t("parentChildRuling") };
-  }
-
-  // Siblings
-  const siblingsA = getSiblings(personA.id);
-  if (siblingsA.some((s) => s.id === personB.id)) {
-    return { isMahram: true, relationship: t("siblings"), ruling: t("siblingRuling") };
-  }
-
-  // Spouse
-  const spousesA = getSpouses(personA.id);
-  if (spousesA.some((s) => s.id === personB.id)) {
-    return { isMahram: true, relationship: t("spouse"), ruling: t("spouseRuling") };
-  }
-
-  // Grandparent-grandchild
-  for (const parent of parentsA) {
-    const grandparents = getParents(parent.id);
-    if (grandparents.some((gp) => gp.id === personB.id)) {
-      return { isMahram: true, relationship: t("grandparent"), ruling: t("grandparentGrandchildRuling") };
-    }
-  }
-  for (const parent of parentsB) {
-    const grandparents = getParents(parent.id);
-    if (grandparents.some((gp) => gp.id === personA.id)) {
-      return { isMahram: true, relationship: t("grandparent"), ruling: t("grandparentGrandchildRuling") };
-    }
-  }
-
-  // Uncle/Aunt - Nephew/Niece
-  for (const parent of parentsA) {
-    const parentSiblings = getSiblings(parent.id);
-    if (parentSiblings.some((ps) => ps.id === personB.id)) {
-      return { isMahram: true, relationship: personB.gender === "male" ? t("uncle") : t("aunt"), ruling: t("uncleAuntRuling") };
-    }
-  }
-  for (const parent of parentsB) {
-    const parentSiblings = getSiblings(parent.id);
-    if (parentSiblings.some((ps) => ps.id === personA.id)) {
-      return { isMahram: true, relationship: personA.gender === "male" ? t("uncle") : t("aunt"), ruling: t("uncleAuntRuling") };
-    }
-  }
-
-  // In-law: Parent of spouse
-  for (const spouse of spousesA) {
-    const spouseParents = getParents(spouse.id);
-    if (spouseParents.some((sp) => sp.id === personB.id)) {
-      return { isMahram: true, relationship: t("parentInLaw"), ruling: t("parentInLawRuling") };
-    }
-  }
-  for (const spouse of getSpouses(personB.id)) {
-    const spouseParents = getParents(spouse.id);
-    if (spouseParents.some((sp) => sp.id === personA.id)) {
-      return { isMahram: true, relationship: t("parentInLaw"), ruling: t("parentInLawRuling") };
-    }
-  }
-
-  return { isMahram: false, relationship: t("notMahram"), ruling: t("notMahramRuling") };
-}
+import { checkMahram } from "@/lib/mahram";
 
 export default function MahramCheckerScreen() {
   const router = useRouter();
   const colors = useColors();
   const { t } = useI18n();
-  const { data, getParents, getChildren, getSpouses, getSiblings } = useFamily();
+  const { data } = useFamily();
   const [personAId, setPersonAId] = useState<string | null>(null);
   const [personBId, setPersonBId] = useState<string | null>(null);
 
@@ -107,9 +21,13 @@ export default function MahramCheckerScreen() {
   const personB = personBId ? data.persons.find((p) => p.id === personBId) : null;
 
   const result = useMemo(() => {
-    if (!personA || !personB || personA.id === personB.id) return null;
-    return checkMahram(personA, personB, getParents, getChildren, getSpouses, getSiblings, t);
-  }, [personAId, personBId, data, t]);
+    if (!personA || !personB) return null;
+    return checkMahram(personA, personB, data);
+  }, [personAId, personBId, data]);
+
+  // Extract BM strings for UI
+  const relationship = result?.labelBm ?? "";
+  const ruling = result?.reasonBm ?? "";
 
   const muslimPersons = data.persons.filter((p) => p.religion === "Islam");
 
@@ -228,11 +146,11 @@ export default function MahramCheckerScreen() {
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-xs text-muted">{t("relationship")}</Text>
-                <Text className="text-xs font-medium text-foreground">{result.relationship}</Text>
+                <Text className="text-xs font-medium text-foreground">{relationship}</Text>
               </View>
             </View>
 
-            <Text className="text-xs text-muted mt-3 leading-relaxed">{result.ruling}</Text>
+            <Text className="text-xs text-muted mt-3 leading-relaxed">{ruling}</Text>
           </View>
         )}
 
