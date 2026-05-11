@@ -9,6 +9,7 @@ import { getDisplayName, Person } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { useState, useMemo } from "react";
 import { MemberAvatar } from "@/components/member-avatar";
+import { generateFamilyPdf } from "@/lib/exports/family-pdf";
 
 type TabKey = "details" | "spouse" | "parents" | "children" | "grandchildren" | "great-grandchildren" | "siblings";
 
@@ -52,6 +53,7 @@ export default function MemberProfileScreen() {
   const { getPersonById, getParents, getChildren, getSpouses, getSiblings, deletePerson, data, setRootPerson } = useFamily();
   const { t, lang } = useI18n();
   const [activeTab, setActiveTab] = useState<TabKey>("details");
+  const [exporting, setExporting] = useState(false);
 
   const person = getPersonById(id || "");
   if (!person) {
@@ -115,6 +117,17 @@ export default function MemberProfileScreen() {
         { text: t("delete"), style: "destructive", onPress: () => { deletePerson(person.id); router.back(); } },
       ]
     );
+  };
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      await generateFamilyPdf(person.id, data);
+    } catch {
+      Alert.alert("Export Gagal", "Tidak dapat menjana PDF. Sila cuba lagi.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const isRoot = data.rootPersonId === person.id;
@@ -301,6 +314,22 @@ export default function MemberProfileScreen() {
             </View>
           </Pressable>
         </View>
+
+        {/* Export Family PDF */}
+        <Pressable
+          onPress={exporting ? undefined : handleExportPdf}
+          style={({ pressed }) => [{ opacity: exporting ? 0.5 : pressed ? 0.8 : 1, marginBottom: 8 }]}
+        >
+          <View
+            className="flex-row items-center justify-center gap-2 rounded-xl py-3"
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+          >
+            <IconSymbol name="arrow.down.doc.fill" size={16} color={colors.foreground} />
+            <Text className="text-sm font-medium text-foreground">
+              {exporting ? "Menjana PDF..." : "Eksport Keluarga ke PDF"}
+            </Text>
+          </View>
+        </Pressable>
 
         {/* View as Root */}
         {!isRoot && (
