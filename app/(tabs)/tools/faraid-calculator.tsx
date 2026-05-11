@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert, TextInput } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -8,6 +8,7 @@ import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
 import { exportFaraidPDF } from "@/lib/pdf-export";
 import { useI18n } from "@/lib/i18n";
+import { PersonSearchSelector } from "@/components/PersonSearchSelector";
 
 interface HeirShare {
   person: Person;
@@ -50,12 +51,10 @@ function calculateFaraid(
   // Spouse share
   for (const spouse of spouses) {
     if (deceased.gender === "male") {
-      // Wife gets 1/8 if children, 1/4 if no children
       const fraction = hasChildren ? "1/8" : "1/4";
       const pct = hasChildren ? 12.5 : 25;
       heirs.push({ person: spouse, relation: t_wife, fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
     } else {
-      // Husband gets 1/4 if children, 1/2 if no children
       const fraction = hasChildren ? "1/4" : "1/2";
       const pct = hasChildren ? 25 : 50;
       heirs.push({ person: spouse, relation: t_husband, fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
@@ -95,7 +94,6 @@ function calculateFaraid(
       }
     }
   } else {
-    // Daughters with sons get Asabah (son:daughter = 2:1)
     for (const d of daughters) {
       heirs.push({ person: d, relation: t_daughter, fraction: `${t_residual} (1:2)`, percentage: 0, color: colors[colorIdx++ % colors.length] });
     }
@@ -107,7 +105,6 @@ function calculateFaraid(
   const asabahHeirs = heirs.filter((h) => h.percentage === 0);
 
   if (asabahHeirs.length > 0 && residual > 0) {
-    // Sons get 2 shares, daughters get 1 share
     const totalShares = asabahHeirs.reduce((sum, h) => {
       if (h.relation === t_son || h.relation === t_father) return sum + 2;
       return sum + 1;
@@ -138,6 +135,12 @@ export default function FaraidCalculatorScreen() {
 
   const totalPercentage = heirShares.reduce((sum, h) => sum + h.percentage, 0);
 
+  const muslimPersonIds = useMemo(() => muslimPersons.map((p) => p.id), [muslimPersons]);
+  const nonMuslimIds = useMemo(
+    () => data.persons.filter((p) => p.religion !== "Islam").map((p) => p.id),
+    [data.persons]
+  );
+
   return (
     <ScreenContainer className="pt-2">
       {/* Header */}
@@ -152,7 +155,11 @@ export default function FaraidCalculatorScreen() {
         <View className="w-12" />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}
+      >
         {/* Info */}
         <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20 mb-6">
           <Text className="text-sm font-medium text-foreground mb-1">{t("islamicInheritanceCalc")}</Text>
@@ -161,47 +168,22 @@ export default function FaraidCalculatorScreen() {
           </Text>
         </View>
 
-        {/* Person Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("selectDeceased")}</Text>
-        {muslimPersons.length === 0 ? (
-          <View className="bg-surface rounded-2xl p-6 border border-border items-center mb-6">
-            <Text className="text-sm text-muted text-center">{t("noMuslimFound")}</Text>
-          </View>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
-            <View className="flex-row gap-2">
-              {muslimPersons.map((person) => (
-                <Pressable
-                  key={person.id}
-                  onPress={() => setSelectedPersonId(person.id)}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-                >
-                  <View
-                    className="px-4 py-3 rounded-xl border min-w-[100px] items-center"
-                    style={{
-                      backgroundColor: selectedPersonId === person.id ? colors.primary : "transparent",
-                      borderColor: selectedPersonId === person.id ? colors.primary : colors.border,
-                    }}
-                  >
-                    <Text
-                      className="text-sm font-medium"
-                      style={{ color: selectedPersonId === person.id ? "#fff" : colors.foreground }}
-                      numberOfLines={1}
-                    >
-                      {person.firstName}
-                    </Text>
-                    <Text
-                      className="text-[10px] mt-0.5"
-                      style={{ color: selectedPersonId === person.id ? "rgba(255,255,255,0.7)" : colors.muted }}
-                    >
-                      {person.gender === "male" ? t("male") : t("female")}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
+        {/* Deceased selector */}
+        <View className="mb-6">
+          {muslimPersons.length === 0 ? (
+            <View className="bg-surface rounded-2xl p-6 border border-border items-center">
+              <Text className="text-sm text-muted text-center">{t("noMuslimFound")}</Text>
             </View>
-          </ScrollView>
-        )}
+          ) : (
+            <PersonSearchSelector
+              label={t("selectDeceased")}
+              value={selectedPersonId}
+              onChange={setSelectedPersonId}
+              placeholder="Pilih si mati"
+              excludeIds={nonMuslimIds}
+            />
+          )}
+        </View>
 
         {/* Results */}
         {selectedPerson && heirShares.length > 0 && (
@@ -248,7 +230,10 @@ export default function FaraidCalculatorScreen() {
             <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
               <View className="flex-row justify-between">
                 <Text className="text-sm font-medium text-foreground">{t("totalDistributed")}</Text>
-                <Text className="text-sm font-bold" style={{ color: Math.abs(totalPercentage - 100) < 1 ? colors.success : colors.warning }}>
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: Math.abs(totalPercentage - 100) < 1 ? colors.success : colors.warning }}
+                >
                   {totalPercentage.toFixed(1)}%
                 </Text>
               </View>
@@ -263,7 +248,7 @@ export default function FaraidCalculatorScreen() {
             <Pressable
               onPress={async () => {
                 try {
-                  const estateAmount = 100000; // Default example
+                  const estateAmount = 100000;
                   const heirData = heirShares.map((h) => ({
                     heir: `${getDisplayName(h.person)} (${h.relation})`,
                     share: `${h.fraction} = ${h.percentage.toFixed(1)}%`,

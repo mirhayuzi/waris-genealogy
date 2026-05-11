@@ -4,10 +4,11 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
-import { getDisplayName, Person } from "@/lib/types";
+import { getDisplayName } from "@/lib/types";
 import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
 import { checkMahram } from "@/lib/mahram";
+import { PersonSearchSelector } from "@/components/PersonSearchSelector";
 
 export default function MahramCheckerScreen() {
   const router = useRouter();
@@ -25,11 +26,8 @@ export default function MahramCheckerScreen() {
     return checkMahram(personA, personB, data);
   }, [personAId, personBId, data]);
 
-  // Extract BM strings for UI
   const relationship = result?.labelBm ?? "";
   const ruling = result?.reasonBm ?? "";
-
-  const muslimPersons = data.persons.filter((p) => p.religion === "Islam");
 
   return (
     <ScreenContainer className="pt-2">
@@ -44,7 +42,11 @@ export default function MahramCheckerScreen() {
         <View className="w-12" />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}
+      >
         <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20 mb-6">
           <Text className="text-sm font-medium text-foreground mb-1">{t("mahramRelationship")}</Text>
           <Text className="text-xs text-muted leading-relaxed">
@@ -52,63 +54,26 @@ export default function MahramCheckerScreen() {
           </Text>
         </View>
 
-        {/* Person A Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("person1")}</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-          <View className="flex-row gap-2">
-            {muslimPersons.map((person) => (
-              <Pressable
-                key={person.id}
-                onPress={() => setPersonAId(person.id)}
-                style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View
-                  className="px-4 py-2.5 rounded-xl border"
-                  style={{
-                    backgroundColor: personAId === person.id ? colors.primary : "transparent",
-                    borderColor: personAId === person.id ? colors.primary : colors.border,
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: personAId === person.id ? "#fff" : colors.foreground }}
-                  >
-                    {person.firstName}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
+        {/* Person 1 */}
+        <View className="mb-4">
+          <PersonSearchSelector
+            label={t("person1")}
+            value={personAId}
+            onChange={setPersonAId}
+            placeholder="Pilih orang pertama"
+          />
+        </View>
 
-        {/* Person B Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("person2")}</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
-          <View className="flex-row gap-2">
-            {muslimPersons.filter((p) => p.id !== personAId).map((person) => (
-              <Pressable
-                key={person.id}
-                onPress={() => setPersonBId(person.id)}
-                style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View
-                  className="px-4 py-2.5 rounded-xl border"
-                  style={{
-                    backgroundColor: personBId === person.id ? colors.accent : "transparent",
-                    borderColor: personBId === person.id ? colors.accent : colors.border,
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: personBId === person.id ? "#fff" : colors.foreground }}
-                  >
-                    {person.firstName}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
+        {/* Person 2 */}
+        <View className="mb-6">
+          <PersonSearchSelector
+            label={t("person2")}
+            value={personBId}
+            onChange={setPersonBId}
+            placeholder="Pilih orang kedua"
+            excludeIds={personAId ? [personAId] : []}
+          />
+        </View>
 
         {/* Result */}
         {result && personA && personB && (
@@ -157,14 +122,6 @@ export default function MahramCheckerScreen() {
         {personAId && personBId && personAId === personBId && (
           <View className="bg-warning/10 rounded-2xl p-4 border border-warning/30">
             <Text className="text-sm text-foreground text-center">{t("selectDifferentPeople")}</Text>
-          </View>
-        )}
-
-        {muslimPersons.length < 2 && (
-          <View className="bg-surface rounded-2xl p-6 border border-border items-center">
-            <Text className="text-sm text-muted text-center">
-              {t("needMoreMuslims")}
-            </Text>
           </View>
         )}
       </ScrollView>
