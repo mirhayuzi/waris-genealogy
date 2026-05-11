@@ -1,4 +1,5 @@
 import { Text, View, Pressable, ScrollView, TextInput, Modal, FlatList, Platform, Alert } from "react-native";
+import { PersonSearchSelector } from "@/components/PersonSearchSelector";
 import { Image } from "expo-image";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -481,17 +482,21 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
 }) {
   const colors = useColors();
   const { t } = useI18n();
-  const [showPicker, setShowPicker] = useState(false);
-  const [linkType, setLinkType] = useState<"spouse" | "parent" | "child">("spouse");
+  const [activePicker, setActivePicker] = useState<"spouse" | "parent" | "child" | null>(null);
 
-  const availablePersons = persons.filter((p) => {
-    if (currentPersonId && p.id === currentPersonId) return false;
-    return !selectedLinks.some((l) => l.personId === p.id);
-  });
+  const alreadyLinkedIds = selectedLinks.map((l) => l.personId);
+  const excludeIds = currentPersonId
+    ? [currentPersonId, ...alreadyLinkedIds]
+    : alreadyLinkedIds;
+
+  const availablePersons = persons.filter(
+    (p) => !(currentPersonId && p.id === currentPersonId)
+  );
 
   const addLink = (personId: string) => {
-    onLinksChange([...selectedLinks, { type: linkType, personId }]);
-    setShowPicker(false);
+    if (!activePicker) return;
+    onLinksChange([...selectedLinks, { type: activePicker, personId }]);
+    setActivePicker(null);
   };
 
   const removeLink = (personId: string) => {
@@ -546,12 +551,12 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
           </View>
         ))}
 
-        {/* Add link button */}
+        {/* Add link buttons */}
         <View className="flex-row gap-2 mt-2">
           {(["spouse", "parent", "child"] as const).map((t_key) => (
             <Pressable
               key={t_key}
-              onPress={() => { setLinkType(t_key); setShowPicker(true); }}
+              onPress={() => setActivePicker(t_key)}
               style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}
             >
               <View className="py-2 rounded-lg border items-center" style={{ borderColor: linkTypeColor(t_key) + "40" }}>
@@ -564,61 +569,16 @@ export function RelationshipLinkSelector({ persons, currentPersonId, selectedLin
         </View>
       </View>
 
-      {/* Person picker modal */}
-      <Modal visible={showPicker} transparent animationType="slide">
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}
-          onPress={() => setShowPicker(false)}
-        >
-          <Pressable style={{ maxHeight: "60%" }}>
-            <View className="bg-background rounded-t-3xl" style={{ paddingBottom: Platform.OS === "ios" ? 34 : 20 }}>
-              <View className="items-center py-3">
-                <View className="w-10 h-1 rounded-full bg-border" />
-              </View>
-              <Text className="text-base font-semibold text-foreground px-5 mb-1">
-                {t("select")} {linkTypeLabel(linkType)}
-              </Text>
-              <Text className="text-xs text-muted px-5 mb-3">
-                {t("chooseMemberToLink")} {linkTypeLabel(linkType).toLowerCase()}
-              </Text>
-
-              {availablePersons.length === 0 ? (
-                <View className="px-5 py-6 items-center">
-                  <Text className="text-sm text-muted">{t("noAvailableMembers")}</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={availablePersons}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      onPress={() => addLink(item.id)}
-                      style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-                    >
-                      <View className="flex-row items-center px-5 py-3 gap-3 border-b border-border">
-                        <View
-                          className="w-8 h-8 rounded-full items-center justify-center"
-                          style={{ backgroundColor: colors.primary + "15" }}
-                        >
-                          <Text className="text-xs font-bold" style={{ color: colors.primary }}>
-                            {item.firstName.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-sm font-medium text-foreground">{getDisplayName(item)}</Text>
-                          <Text className="text-xs text-muted">
-                            {item.gender === "male" ? t("male") : t("female")} · {item.religion}
-                          </Text>
-                        </View>
-                      </View>
-                    </Pressable>
-                  )}
-                />
-              )}
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Searchable person picker (controlled mode — no trigger button rendered) */}
+      <PersonSearchSelector
+        value={null}
+        onChange={addLink}
+        label={activePicker ? `${t("select")} ${linkTypeLabel(activePicker)}` : undefined}
+        isOpen={activePicker !== null}
+        onRequestClose={() => setActivePicker(null)}
+        excludeIds={excludeIds}
+        personList={availablePersons}
+      />
     </>
   );
 }
