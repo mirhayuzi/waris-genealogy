@@ -88,14 +88,14 @@ export default function ToolsScreen() {
             description={t("calcIslamicInheritance")}
             icon="chart.pie.fill"
             color={colors.primary}
-            onPress={() => router.push("./faraid-calculator" as any)}
+            onPress={() => router.push("/(tabs)/tools/faraid-calculator")}
           />
           <ToolCard
             title={t("mahramChecker")}
             description={t("checkMahramRelationships")}
             icon="person.2.fill"
             color={colors.accent}
-            onPress={() => router.push("./mahram-checker" as any)}
+            onPress={() => router.push("/(tabs)/tools/mahram-checker")}
           />
         </View>
 
